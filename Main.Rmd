@@ -8,7 +8,7 @@ output: html_document
 ```{r Initialization}
 #Define SIR Model Parameters
 SIR_parms  <- c(beta = 0.1, #transmission rate
-                gamma = 0.1) # recovery rate
+                gamma = 0.03) # recovery rate
 
 phi_max <- 0.25 # percent roost infidelity
 
@@ -215,7 +215,7 @@ deleteRoost <- function(roosts, roost_index) {
 roost_series <- list()
 roost_series[[1]] <- roosts
 for(i in 2:1000) {
-  roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.25, roost_dist)
+  roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.1, roost_dist)
   if(i%%200==0) {
     roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
   }
@@ -275,28 +275,24 @@ daytime <- function(roosts, roost_parms, SIR_parms) {
   }
   return(roosts)
 }
-
-for(i in 1:200) {
-  roosts <- daytime(roosts, roost_parms, SIR_parms)
-}
-
 ```
 
 ```{r Single Day Function}
-singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, max_time=0.1, num_roosts=roost_parms[1], phi_max=0.25) {
+singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, num_roosts=roost_parms[1], phi_max=0.25) {
   roosts <- movement(roosts, num_roosts=roost_parms[1], phi_max=0.25, roost_dist)
-  roosts <- daytime(roosts, roost_parms, SIR_parms, max_time)
+  roosts <- daytime(roosts, roost_parms, SIR_parms)
   return(roosts)
 }
 ```
 
 ```{r total Vis}
 roost_series <- list()
-for(i in 1:100) {
-  roost_series[[i]] = singleDay(roosts, roost_dist, SIR_parms, max_time=0.1, num_roosts = roost_parms[1], phi_max=0.25)
-  if(i%%20==0) {
-    roosts <- deleteRoost(roosts, sample(1:10,1))
-  }
+roost_series[[1]] <- roosts
+for(i in 2:500) {
+  roost_series[[i]] = singleDay(roost_series[[i-1]], roost_dist, roost_parms, SIR_parms, num_roosts = roost_parms[1], phi_max=0.25)
+  #if(i%%20==0) {
+  #  roosts <- deleteRoost(roosts, sample(1:10,1))
+  #}
 }
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
@@ -310,15 +306,110 @@ roost_vec <- as.data.frame(roost_vec)
 roost_vec <- cbind(roost_vec,seq(1:length(roost_vec$Roost1)))
 colnames(roost_vec)[length(colnames(roost_vec))] <- "t"
 
-ggplot(data=roost_vec[1:100,],aes(t)) +
-  geom_line(aes(y=Roost1), color="black") +
-  geom_line(aes(y=Roost2), color="red") +
-  geom_line(aes(y=Roost3), color="green") +
-  geom_line(aes(y=Roost4), color="blue") +
-  geom_line(aes(y=Roost5), color="purple") +
-  geom_line(aes(y=Roost6), color="yellow") +
-  geom_line(aes(y=Roost7), color="orange") +
-  geom_line(aes(y=Roost8), color="darkgrey") +
-  geom_line(aes(y=Roost9), color="cyan3") +
-  geom_line(aes(y=Roost10), color="darkorange4")
+tot <- ggplot(data=roost_vec[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Occupancy") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Total Roost Occupancy")
+```
+
+```{r Susc. Vis}
+roost_vecS <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecS[i,j] = roost_series[[i]]$S[j]
+  }
+}
+colnames(roost_vecS) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecS <- as.data.frame(roost_vecS)
+roost_vecS <- cbind(roost_vecS,seq(1:length(roost_vecS$Roost1)))
+colnames(roost_vecS)[length(colnames(roost_vecS))] <- "t"
+
+susc <- ggplot(data=roost_vecS[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Susc. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Susceptible Population")
+```
+
+```{r Inf. Vis}
+roost_vecI <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecI[i,j] = roost_series[[i]]$I[j]
+  }
+}
+colnames(roost_vecI) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecI <- as.data.frame(roost_vecI)
+roost_vecI <- cbind(roost_vecI,seq(1:length(roost_vecI$Roost1)))
+colnames(roost_vecI)[length(colnames(roost_vecI))] <- "t"
+
+inft <- ggplot(data=roost_vecI[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Inf. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Infected Population")
+```
+
+```{r Rec. Vis}
+roost_vecR <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecR[i,j] = roost_series[[i]]$R[j]
+  }
+}
+colnames(roost_vecR) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecR <- as.data.frame(roost_vecR)
+roost_vecR <- cbind(roost_vecR,seq(1:length(roost_vecR$Roost1)))
+colnames(roost_vecR)[length(colnames(roost_vecR))] <- "t"
+
+recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Inf. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Recovered Population")
+```
+
+```{r Visualization}
+library(gridExtra)
+grid.arrange(tot, susc, inft, recv)
 ```
