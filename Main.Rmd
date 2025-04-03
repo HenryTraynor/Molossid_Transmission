@@ -7,25 +7,26 @@ output: html_document
 
 ```{r Initialization}
 #Define SIR Model Parameters
-SIR_parms  <- c(a = 0.06,   # birth rate
-              b =0.04,     # death rate
-              beta = 0.4,  # transmission rate
-              nu = 0.02,   # loss of immunity
-              alpha =0.5,  # disease induced death
-              gamma = 0.5) # recovery rate
+SIR_parms  <- c(beta = 0.1, #transmission rate
+                gamma = 0.1) # recovery rate
 
-phi <- 0.1 # percent roost infidelity
+phi_max <- 0.25 # percent roost infidelity
 
-roost_parms <- c(num_roosts = 100,  # number of roosts
-                 num_clusters = 2, # number of clusters
+roost_parms <- c(num_roosts = 10,  # number of roosts
+                 num_clusters = 3, # number of clusters
                  sd = 0.1)           # standard distance from cluster center
 ```
 
 ```{r Roost Creation}
 source("cluster_map.R")
-roost_map <- cluster_map(roost_parms[1],
+roost_map <- cbind(cluster_map(roost_parms[1],
                          roost_parms[2],
-                         roost_parms[3])
+                         roost_parms[3]),
+                   as.data.frame(as.character(seq(1,roost_parms[1]))),
+                   as.data.frame(sample.int(50, size=roost_parms[1], replace=TRUE)+10)
+                   
+)
+colnames(roost_map)[4:5] <- c("lbl", "N_max")
 
 #Matrix to store distance values between roosts
 {roost_dist <- matrix(nrow=roost_parms[1],
@@ -39,7 +40,8 @@ for(i in 1:roost_parms[1]) {
   }
 }
 
-plot(roost_map$x, roost_map$y)
+library(ggplot2)
+ggplot(roost_map, aes(x,y, color=bin, label = lbl, size=N_max)) + geom_text() + xlim(0,1) + ylim(0,1)
 ```
 
 ```{r Roosts}
@@ -47,71 +49,276 @@ roosts <- data.frame(
   S = vector("numeric", length=roost_parms[1]),
   I = vector("numeric", length=roost_parms[1]),
   R = vector("numeric", length=roost_parms[1]),
-  N = vector("numeric", length=roost_parms[1])
+  N = vector("numeric", length=roost_parms[1]),
+  N_max = roost_map$N_max
 )
 
 #Populate Roosts
-roosts$N <- 15
+roosts$N <- round(roosts$N_max/1.5)
 roosts$S <- roosts$N-1
-roosts$I <- 1
-```
+roosts$I <- roosts$N-roosts$S
 
-```{r Movement}
-movement <- function(roosts, parms) {
-  phi <- parms[7] # roost fidelity
-  
-  #matrix that stores total number of bats leaving roost i and traveling to roost j
-  emigrant_bats <- matrix(ncol=roost_parms[1], nrow=roost_parms[1])
-  for(i in 1:roost_parms[1]) {
-    for(j in 1:roost_parms[1]) {
-      if(i == j) {
-        total_emigrants_ij <- 0
-      }
-      else {
-        # infidelity*num_bats*(1-proportion of distance)
-        total_emigrants_ij <- phi * roosts$N[i] * (1- (roost_dist[i,j] / sum(roost_dist[i,])))
-      }
-      emigrant_bats[i,j] <- total_emigrants_ij
-    }
+#Total distances between any 2 roosts
+total_dist <- 0
+for(i in 1:roost_parms[1]) {
+  for(j in 1:i) {
+    total_dist <- total_dist + as.numeric(roost_dist[i,j])
   }
-  #subtract emigrants from their home roosts
-  for(i in 1:roost_parms[1]) {
-    roosts$S[i] <- roosts$S[i] - (sum(emigrant_bats[i,])*roosts$S[i]/roosts$N[i]) # sum by row or column?
-    roosts$I[i] <- roosts$I[i] - (sum(emigrant_bats[i,])*roosts$I[i]/roosts$N[i])
-    roosts$R[i] <- roosts$R[i] - (sum(emigrant_bats[i,])*roosts$R[i]/roosts$N[i])
-    roosts$N[i] <- roosts$S[i] + roosts$I[i] + roosts$R[i]
-  }
-  
-  #add immigrants
-  for(i in 1:roost_parms[1]) {
-    
-  }
+}
+
+#Score, a measure of isolation. greater score ==> greater isolation
+scores <- vector("numeric", length=roost_parms[1])
+for(i in 1:roost_parms[1]) {
+  tot <- sum(roost_dist[i,])
+  scores[i] <- tot/total_dist
 }
 ```
 
-```{r deSolve & Plot}
-#Solve
-library(deSolve)
-output <- ode(y_init,
-              times,
-              SIR,
-              parms) 
-#needs to be given (in order) initial values of the variables, times for output, the name of the function to solve, the parameters
+```{r Movement}
+movement <- function(roosts, num_roosts, phi_max, roost_dist) {
+  num_roosts <- roost_parms[1]
+  
+  #matrix that stores total number of bats leaving roost i
+  emigrant_bats <- data.frame(
+    S = vector("numeric", length=num_roosts),
+    I = vector("numeric", length=num_roosts),
+    R = vector("numeric", length=num_roosts),
+    N = vector("numeric", length=num_roosts)
+  )
+  #matrix storing num bats that travel to roost i
+  immigrant_bats <- data.frame(
+    S = vector("numeric", length=num_roosts),
+    I = vector("numeric", length=num_roosts),
+    R = vector("numeric", length=num_roosts),
+    N = vector("numeric", length=num_roosts)
+  )
 
-summary(output) 
-#returns a matrix with columns for time and each of the variables
+  for(i in 1:num_roosts) {
+    phi <- phi_max*(1-scores[i])
+    #Number from each compartment leaving
+    emigrant_bats$N[i] <- round(phi * roosts$N[i])
+    emigrant_bats$S[i] <- round(emigrant_bats$N[i]*(roosts$S[i]/roosts$N[i]))
+    emigrant_bats$I[i] <- round(emigrant_bats$N[i]*(roosts$I[i]/roosts$N[i]))
+    emigrant_bats$R[i] <- round(emigrant_bats$N[i]*(roosts$R[i]/roosts$N[i]))
+  }
+  
+  #Bats going from i to j
+  for(i in 1:num_roosts) {
+    #Decay function for j being destination
+    #Exp base may be an interesting way to alter dispersal distance
+    pi <- (1/100)^roost_dist[i,]*(roosts$N/roosts$N_max)
+    for(k in 1:length(pi)) {
+      if (roosts$N[k]>=roosts$N_max[k]) {
+        pi[k]=0
+      }
+    }
+    #so that bat to not return to the same roost
+    pi[i]=0
+    #if size==0, dont sample and set destination to 0
+    if(emigrant_bats$S[i] !=0 && !is.na(emigrant_bats$S[i])) {
+      destinationS <- sample.int(num_roosts, size=emigrant_bats$S[i], replace=TRUE, prob=pi)
+      
+      for(j in 1:length(destinationS)) {
+        immigrant_bats$S[destinationS[j]] <- immigrant_bats$S[destinationS[j]] + 1
+      }
+    }
+    if(emigrant_bats$I[i] !=0 && !is.na(emigrant_bats$I[i])) {
+      destinationI <- sample.int(num_roosts, size=emigrant_bats$I[i], replace=TRUE, prob=pi)
+      
+      for(j in 1:length(destinationI)) {
+        immigrant_bats$I[destinationI[j]] <- immigrant_bats$I[destinationI[j]] + 1
+      }
+    }
+    if(emigrant_bats$R[i] !=0 && !is.na(emigrant_bats$R[i])) {
+      destinationR <- sample.int(num_roosts, size=emigrant_bats$R[i], replace=TRUE, prob=pi)
+      
+      for(j in 1:length(destinationR)) {
+        immigrant_bats$R[destinationR[j]] <- immigrant_bats$R[destinationR[j]] + 1
+      }
+    }
+  }
+  for(i in 1:num_roosts) {
+    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
+  }
+  
+  #Subtract emigrants
+  roosts[,1:4] <- roosts[,1:4] - emigrant_bats
+  #Add immigrants
+  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
+  
+  return(roosts)
+}
+```
 
-head(output)
+```{r Roost Deletion}
+#We want to sometimes remove roosts from the system
+#Determine where these bats go
 
-#Visualise
-plot(output)
-plot(output[,"S"],output[,"I"],type="l")
+deleteRoost <- function(roosts, roost_index) {
+  num_roosts <- roost_parms[1]
+  #Bats leaving 'roost_index'
+  emigrant_bats <- roosts[roost_index,1:4]
+  #Bat destinations
+  immigrant_bats <- data.frame(
+    S = vector("numeric", length=num_roosts),
+    I = vector("numeric", length=num_roosts),
+    R = vector("numeric", length=num_roosts),
+    N = vector("numeric", length=num_roosts)
+  )
 
-#Plot all three variables on the one set of axes
-output.data<-as.data.frame(output)
-par(mfrow=c(1,1),cex=2,lwd=2,las=1)
+  #Decay function for j being destination
+  #Exp base may be an interesting way to alter dispersal distance
+  pi <- (1/100)^roost_dist[roost_index,]*(roosts$N/roosts$N_max)
+  for(k in 1:length(pi)) {
+    if (roosts$N[k]>=roosts$N_max[k]) {
+      pi[k]=0
+    }
+  }
+  pi[roost_index]=0
+  #if size==0, dont sample and set destination to 0
+  if(emigrant_bats$S !=0 && !is.na(emigrant_bats$S)) {
+    destinationS <- sample.int(num_roosts, size=emigrant_bats$S, replace=TRUE, prob=pi)
+      
+    for(j in 1:length(destinationS)) {
+      immigrant_bats$S[destinationS[j]] <- immigrant_bats$S[destinationS[j]] + 1
+    }
+  }
+  if(emigrant_bats$I !=0 && !is.na(emigrant_bats$I)) {
+    destinationI <- sample.int(num_roosts, size=emigrant_bats$I, replace=TRUE, prob=pi)
+      
+    for(j in 1:length(destinationI)) {
+      immigrant_bats$I[destinationI[j]] <- immigrant_bats$I[destinationI[j]] + 1
+    }
+  }
+  if(emigrant_bats$R !=0 && !is.na(emigrant_bats$R)) {
+    destinationR <- sample.int(num_roosts, size=emigrant_bats$R, replace=TRUE, prob=pi)
+      
+    for(j in 1:length(destinationR)) {
+      immigrant_bats$R[destinationR[j]] <- immigrant_bats$R[destinationR[j]] + 1
+    }
+  }
+  
+  for(i in 1:num_roosts) {
+    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
+  }
+  
+  #Subtract emigrants
+  roosts[roost_index,] <- c(0,0,0,0,0)
+  #Add immigrants
+  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
+  
+  return(roosts)
+}
+```
 
-{plot(S~time,data=output.data,type="l",ylim=c(0,10),ylab="N")
-lines(I~time,data=output.data,col="red")
-lines(R~time,data=output.data,col="blue")}
+```{r Movement Vis}
+roost_series <- list()
+roost_series[[1]] <- roosts
+for(i in 2:1000) {
+  roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.25, roost_dist)
+  if(i%%200==0) {
+    roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
+  }
+}
+roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vec[i,j] = roost_series[[i]]$N[j]
+  }
+}
+colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vec <- as.data.frame(roost_vec)
+roost_vec <- cbind(roost_vec,seq(1:length(roost_vec$Roost1)))
+colnames(roost_vec)[length(colnames(roost_vec))] <- "t"
+
+library(ggplot2)
+ggplot(data=roost_vec,aes(t)) +
+  geom_line(aes(y=Roost1), color="black") +
+  geom_line(aes(y=Roost2), color="red") +
+  geom_line(aes(y=Roost3), color="green") +
+  geom_line(aes(y=Roost4), color="blue") +
+  geom_line(aes(y=Roost5), color="purple") +
+  geom_line(aes(y=Roost6), color="yellow") +
+  geom_line(aes(y=Roost7), color="orange") +
+  geom_line(aes(y=Roost8), color="darkgrey") +
+  geom_line(aes(y=Roost9), color="cyan3") +
+  geom_line(aes(y=Roost10), color="darkorange4")
+```
+
+```{r Daytime Function}
+SIRleap <- function(x, SIR_parms, tau=1) {
+  #tau is in 'nights'
+  S <- x[1]
+  I <- x[2]
+  R <- x[3]
+  N <- x[4]
+  beta <- SIR_parms["beta"]
+  gamma <- SIR_parms["gamma"]
+  
+  #c(new infections, recoveries)
+  rates <- c(beta*S*I/N,
+             gamma*I
+             )
+  rates <- rpois(n=length(rates), lambda=as.numeric(rates))
+  x[1:3] <- x[1:3] + c(-1*rates[1], rates[1]-rates[2], rates[2])
+  return(x)
+}
+
+
+
+daytime <- function(roosts, roost_parms, SIR_parms) {
+  for(i in 1:roost_parms[1]) {
+    x <- roosts[i,1:4]
+    x <- SIRleap(x, SIR_parms)
+    roosts[i,1:4] <- x
+  }
+  return(roosts)
+}
+
+for(i in 1:200) {
+  roosts <- daytime(roosts, roost_parms, SIR_parms)
+}
+
+```
+
+```{r Single Day Function}
+singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, max_time=0.1, num_roosts=roost_parms[1], phi_max=0.25) {
+  roosts <- movement(roosts, num_roosts=roost_parms[1], phi_max=0.25, roost_dist)
+  roosts <- daytime(roosts, roost_parms, SIR_parms, max_time)
+  return(roosts)
+}
+```
+
+```{r total Vis}
+roost_series <- list()
+for(i in 1:100) {
+  roost_series[[i]] = singleDay(roosts, roost_dist, SIR_parms, max_time=0.1, num_roosts = roost_parms[1], phi_max=0.25)
+  if(i%%20==0) {
+    roosts <- deleteRoost(roosts, sample(1:10,1))
+  }
+}
+roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vec[i,j] = roost_series[[i]]$N[j]
+  }
+}
+colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vec <- as.data.frame(roost_vec)
+roost_vec <- cbind(roost_vec,seq(1:length(roost_vec$Roost1)))
+colnames(roost_vec)[length(colnames(roost_vec))] <- "t"
+
+ggplot(data=roost_vec[1:100,],aes(t)) +
+  geom_line(aes(y=Roost1), color="black") +
+  geom_line(aes(y=Roost2), color="red") +
+  geom_line(aes(y=Roost3), color="green") +
+  geom_line(aes(y=Roost4), color="blue") +
+  geom_line(aes(y=Roost5), color="purple") +
+  geom_line(aes(y=Roost6), color="yellow") +
+  geom_line(aes(y=Roost7), color="orange") +
+  geom_line(aes(y=Roost8), color="darkgrey") +
+  geom_line(aes(y=Roost9), color="cyan3") +
+  geom_line(aes(y=Roost10), color="darkorange4")
 ```
