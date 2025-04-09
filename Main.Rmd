@@ -19,11 +19,11 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
 
 ```{r Roost Creation}
 source("cluster_map.R")
-roost_map <- cbind(cluster_map(roost_parms[1],
+roost_map <- cbind(clusterMap(roost_parms[1],
                          roost_parms[2],
                          roost_parms[3]),
                    as.data.frame(as.character(seq(1,roost_parms[1]))),
-                   as.data.frame(sample.int(50, size=roost_parms[1], replace=TRUE)+10)
+                   as.data.frame(sample.int(50, size=roost_parms[1], replace=TRUE)+20)
                    
 )
 colnames(roost_map)[4:5] <- c("lbl", "N_max")
@@ -243,7 +243,8 @@ ggplot(data=roost_vec,aes(t)) +
   geom_line(aes(y=Roost7), color="orange") +
   geom_line(aes(y=Roost8), color="darkgrey") +
   geom_line(aes(y=Roost9), color="cyan3") +
-  geom_line(aes(y=Roost10), color="darkorange4")
+  geom_line(aes(y=Roost10), color="darkorange4") +
+  ylab("Roost Occupancy")
 ```
 
 ```{r Daytime Function}
@@ -278,7 +279,7 @@ daytime <- function(roosts, roost_parms, SIR_parms) {
 ```
 
 ```{r Single Day Function}
-singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, num_roosts=roost_parms[1], phi_max=0.25) {
+singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, num_roosts, phi_max=0.25) {
   roosts <- movement(roosts, num_roosts=roost_parms[1], phi_max=0.25, roost_dist)
   roosts <- daytime(roosts, roost_parms, SIR_parms)
   return(roosts)
@@ -298,7 +299,7 @@ roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_ser
 
 for(i in 1:length(roost_series)) {
   for(j in 1:roost_parms[1]) {
-    roost_vec[i,j] = roost_series[[i]]$N[j]
+    roost_vec[i,j] = roost_series[[i]]$N[j]/roost_series[[i]]$N_max[j]
   }
 }
 colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))

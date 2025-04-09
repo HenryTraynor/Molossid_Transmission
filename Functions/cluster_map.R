@@ -1,5 +1,5 @@
 library(truncnorm)
-cluster_map <- function(num_roosts, num_clusters, sd) {
+clusterMap <- function(num_roosts, num_clusters, sd) {
   #Dataframe to hold roost locations
   roosts <- data.frame(x=vector("numeric", num_roosts),
                        y=vector("numeric", num_roosts))
