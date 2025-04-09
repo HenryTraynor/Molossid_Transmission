@@ -42,15 +42,15 @@ roostMap <- function(roost_parms) {
 }
 
 distMatrix <- function(num_roosts, roost_map) {
-  num_roosts <- roost_parms[1]
   #Matrix to store distance values between roosts
-  roost_dist <- matrix(nrow=roost_parms[1], ncol=roost_parms[1])
-  colnames(roost_dist) <- as.character(seq(1:roost_parms[1]))
+  roost_dist <- matrix(nrow=num_roosts, ncol=num_roosts)
+  colnames(roost_dist) <- as.character(seq(1:num_roosts))
   
   #Iterate through roosts and calculate distances between them, creates symmetric matrix with zero diagonal
-  for(i in 1:roost_parms[1]) {
-    for(j in 1:roost_parms[1]) {
+  for(i in 1:num_roosts) {
+    for(j in 1:num_roosts) {
       roost_dist[i,j] = sqrt((roost_map$x[j]-roost_map$x[i])^2+(roost_map$y[j]-roost_map$y[i])^2)
     }
   }
+  return(roost_dist)
 }

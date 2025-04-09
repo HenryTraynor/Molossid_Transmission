@@ -18,33 +18,15 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
 ```
 
 ```{r Roost Creation}
-source("cluster_map.R")
-roost_map <- cbind(clusterMap(roost_parms[1],
-                         roost_parms[2],
-                         roost_parms[3]),
-                   as.data.frame(as.character(seq(1,roost_parms[1]))),
-                   as.data.frame(sample.int(50, size=roost_parms[1], replace=TRUE)+20)
-                   
-)
-colnames(roost_map)[4:5] <- c("lbl", "N_max")
-
-#Matrix to store distance values between roosts
-{roost_dist <- matrix(nrow=roost_parms[1],
-                     ncol=roost_parms[1])
-colnames(roost_dist) <- as.character(seq(1:roost_parms[1]))}
-
-#Iterate through roosts and calculate distances between them, creates symmetric matrix with zero diagonal
-for(i in 1:roost_parms[1]) {
-  for(j in 1:roost_parms[1]) {
-    roost_dist[i,j] = sqrt((roost_map$x[j]-roost_map$x[i])^2+(roost_map$y[j]-roost_map$y[i])^2)
-  }
-}
+source("Functions/roost_map.R")
+roost_map <- roostMap(roost_parms)
+roost_dist <- distMatrix(roost_parms[1], roost_map)
 
 library(ggplot2)
 ggplot(roost_map, aes(x,y, color=bin, label = lbl, size=N_max)) + geom_text() + xlim(0,1) + ylim(0,1)
 ```
 
-```{r Roosts}
+```{r SIR Roosts}
 roosts <- data.frame(
   S = vector("numeric", length=roost_parms[1]),
   I = vector("numeric", length=roost_parms[1]),
@@ -75,140 +57,7 @@ for(i in 1:roost_parms[1]) {
 ```
 
 ```{r Movement}
-movement <- function(roosts, num_roosts, phi_max, roost_dist) {
-  num_roosts <- roost_parms[1]
-  
-  #matrix that stores total number of bats leaving roost i
-  emigrant_bats <- data.frame(
-    S = vector("numeric", length=num_roosts),
-    I = vector("numeric", length=num_roosts),
-    R = vector("numeric", length=num_roosts),
-    N = vector("numeric", length=num_roosts)
-  )
-  #matrix storing num bats that travel to roost i
-  immigrant_bats <- data.frame(
-    S = vector("numeric", length=num_roosts),
-    I = vector("numeric", length=num_roosts),
-    R = vector("numeric", length=num_roosts),
-    N = vector("numeric", length=num_roosts)
-  )
-
-  for(i in 1:num_roosts) {
-    phi <- phi_max*(1-scores[i])
-    #Number from each compartment leaving
-    emigrant_bats$N[i] <- round(phi * roosts$N[i])
-    emigrant_bats$S[i] <- round(emigrant_bats$N[i]*(roosts$S[i]/roosts$N[i]))
-    emigrant_bats$I[i] <- round(emigrant_bats$N[i]*(roosts$I[i]/roosts$N[i]))
-    emigrant_bats$R[i] <- round(emigrant_bats$N[i]*(roosts$R[i]/roosts$N[i]))
-  }
-  
-  #Bats going from i to j
-  for(i in 1:num_roosts) {
-    #Decay function for j being destination
-    #Exp base may be an interesting way to alter dispersal distance
-    pi <- (1/100)^roost_dist[i,]*(roosts$N/roosts$N_max)
-    for(k in 1:length(pi)) {
-      if (roosts$N[k]>=roosts$N_max[k]) {
-        pi[k]=0
-      }
-    }
-    #so that bat to not return to the same roost
-    pi[i]=0
-    #if size==0, dont sample and set destination to 0
-    if(emigrant_bats$S[i] !=0 && !is.na(emigrant_bats$S[i])) {
-      destinationS <- sample.int(num_roosts, size=emigrant_bats$S[i], replace=TRUE, prob=pi)
-      
-      for(j in 1:length(destinationS)) {
-        immigrant_bats$S[destinationS[j]] <- immigrant_bats$S[destinationS[j]] + 1
-      }
-    }
-    if(emigrant_bats$I[i] !=0 && !is.na(emigrant_bats$I[i])) {
-      destinationI <- sample.int(num_roosts, size=emigrant_bats$I[i], replace=TRUE, prob=pi)
-      
-      for(j in 1:length(destinationI)) {
-        immigrant_bats$I[destinationI[j]] <- immigrant_bats$I[destinationI[j]] + 1
-      }
-    }
-    if(emigrant_bats$R[i] !=0 && !is.na(emigrant_bats$R[i])) {
-      destinationR <- sample.int(num_roosts, size=emigrant_bats$R[i], replace=TRUE, prob=pi)
-      
-      for(j in 1:length(destinationR)) {
-        immigrant_bats$R[destinationR[j]] <- immigrant_bats$R[destinationR[j]] + 1
-      }
-    }
-  }
-  for(i in 1:num_roosts) {
-    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
-  }
-  
-  #Subtract emigrants
-  roosts[,1:4] <- roosts[,1:4] - emigrant_bats
-  #Add immigrants
-  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
-  
-  return(roosts)
-}
-```
-
-```{r Roost Deletion}
-#We want to sometimes remove roosts from the system
-#Determine where these bats go
-
-deleteRoost <- function(roosts, roost_index) {
-  num_roosts <- roost_parms[1]
-  #Bats leaving 'roost_index'
-  emigrant_bats <- roosts[roost_index,1:4]
-  #Bat destinations
-  immigrant_bats <- data.frame(
-    S = vector("numeric", length=num_roosts),
-    I = vector("numeric", length=num_roosts),
-    R = vector("numeric", length=num_roosts),
-    N = vector("numeric", length=num_roosts)
-  )
-
-  #Decay function for j being destination
-  #Exp base may be an interesting way to alter dispersal distance
-  pi <- (1/100)^roost_dist[roost_index,]*(roosts$N/roosts$N_max)
-  for(k in 1:length(pi)) {
-    if (roosts$N[k]>=roosts$N_max[k]) {
-      pi[k]=0
-    }
-  }
-  pi[roost_index]=0
-  #if size==0, dont sample and set destination to 0
-  if(emigrant_bats$S !=0 && !is.na(emigrant_bats$S)) {
-    destinationS <- sample.int(num_roosts, size=emigrant_bats$S, replace=TRUE, prob=pi)
-      
-    for(j in 1:length(destinationS)) {
-      immigrant_bats$S[destinationS[j]] <- immigrant_bats$S[destinationS[j]] + 1
-    }
-  }
-  if(emigrant_bats$I !=0 && !is.na(emigrant_bats$I)) {
-    destinationI <- sample.int(num_roosts, size=emigrant_bats$I, replace=TRUE, prob=pi)
-      
-    for(j in 1:length(destinationI)) {
-      immigrant_bats$I[destinationI[j]] <- immigrant_bats$I[destinationI[j]] + 1
-    }
-  }
-  if(emigrant_bats$R !=0 && !is.na(emigrant_bats$R)) {
-    destinationR <- sample.int(num_roosts, size=emigrant_bats$R, replace=TRUE, prob=pi)
-      
-    for(j in 1:length(destinationR)) {
-      immigrant_bats$R[destinationR[j]] <- immigrant_bats$R[destinationR[j]] + 1
-    }
-  }
-  
-  for(i in 1:num_roosts) {
-    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
-  }
-  
-  #Subtract emigrants
-  roosts[roost_index,] <- c(0,0,0,0,0)
-  #Add immigrants
-  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
-  
-  return(roosts)
-}
+source("Functions/movement_func.R")
 ```
 
 ```{r Movement Vis}
