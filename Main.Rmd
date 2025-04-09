@@ -57,7 +57,7 @@ for(i in 1:roost_parms[1]) {
 ```
 
 ```{r Movement}
-source("Functions/movement_func.R")
+source("Functions/single_day.R")
 ```
 
 ```{r Movement Vis}
@@ -94,45 +94,6 @@ ggplot(data=roost_vec,aes(t)) +
   geom_line(aes(y=Roost9), color="cyan3") +
   geom_line(aes(y=Roost10), color="darkorange4") +
   ylab("Roost Occupancy")
-```
-
-```{r Daytime Function}
-SIRleap <- function(x, SIR_parms, tau=1) {
-  #tau is in 'nights'
-  S <- x[1]
-  I <- x[2]
-  R <- x[3]
-  N <- x[4]
-  beta <- SIR_parms["beta"]
-  gamma <- SIR_parms["gamma"]
-  
-  #c(new infections, recoveries)
-  rates <- c(beta*S*I/N,
-             gamma*I
-             )
-  rates <- rpois(n=length(rates), lambda=as.numeric(rates))
-  x[1:3] <- x[1:3] + c(-1*rates[1], rates[1]-rates[2], rates[2])
-  return(x)
-}
-
-
-
-daytime <- function(roosts, roost_parms, SIR_parms) {
-  for(i in 1:roost_parms[1]) {
-    x <- roosts[i,1:4]
-    x <- SIRleap(x, SIR_parms)
-    roosts[i,1:4] <- x
-  }
-  return(roosts)
-}
-```
-
-```{r Single Day Function}
-singleDay <- function(roosts, roost_dist, roost_parms, SIR_parms, num_roosts, phi_max=0.25) {
-  roosts <- movement(roosts, num_roosts=roost_parms[1], phi_max=0.25, roost_dist)
-  roosts <- daytime(roosts, roost_parms, SIR_parms)
-  return(roosts)
-}
 ```
 
 ```{r total Vis}
