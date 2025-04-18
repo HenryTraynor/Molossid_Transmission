@@ -63,10 +63,9 @@ roost_series <- list()
 roost_series[[1]] <- roosts
 for(i in 2:1000) {
   roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.1, roost_dist)
-  if(i%%200==0) {
-    roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
+  #if(i%%200==0) {
+   # roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
   }
-}
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
 for(i in 1:length(roost_series)) {
