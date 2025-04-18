@@ -10,8 +10,6 @@ output: html_document
 SIR_parms  <- c(beta = 0.1, #transmission rate
                 gamma = 0.03) # recovery rate
 
-phi_max <- 0.25 # percent roost infidelity
-
 roost_parms <- c(num_roosts = 10,  # number of roosts
                  num_clusters = 3, # number of clusters
                  sd = 0.1)           # standard distance from cluster center
@@ -109,7 +107,7 @@ roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_ser
 
 for(i in 1:length(roost_series)) {
   for(j in 1:roost_parms[1]) {
-    roost_vec[i,j] = roost_series[[i]]$N[j]/roost_series[[i]]$N_max[j]
+    roost_vec[i,j] = roost_series[[i]]$N[j]
   }
 }
 colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
@@ -118,6 +116,35 @@ roost_vec <- cbind(roost_vec,seq(1:length(roost_vec$Roost1)))
 colnames(roost_vec)[length(colnames(roost_vec))] <- "t"
 
 tot <- ggplot(data=roost_vec[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Occupancy") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Total Roost Occupancy")
+```
+
+```{r % occupancy}
+roost_vecP <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecP[i,j] = roost_series[[i]]$N[j]/roost_series[[i]]$N_max[j]
+  }
+}
+colnames(roost_vecP) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecP <- as.data.frame(roost_vecP)
+roost_vecP <- cbind(roost_vecP,seq(1:length(roost_vecP$Roost1)))
+colnames(roost_vecP)[length(colnames(roost_vecP))] <- "t"
+
+prop <- ggplot(data=roost_vecP[1:250,],aes(t)) +
   geom_line(aes(y=Roost1, color="Roost 1")) +
   geom_line(aes(y=Roost2, color="Roost 2")) +
   geom_line(aes(y=Roost3, color="Roost 3")) +
@@ -222,5 +249,5 @@ recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
 
 ```{r Visualization}
 library(gridExtra)
-grid.arrange(tot, susc, inft, recv)
+grid.arrange(tot, prop,susc, inft, recv)
 ```

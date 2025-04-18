@@ -1,18 +1,17 @@
-SIRleap <- function(x, SIR_parms, tau=1) {
-  #tau is in 'nights'
-  S <- x[1]
-  I <- x[2]
-  R <- x[3]
-  N <- x[4]
+SIRleap <- function(x, SIR_parms) {
+  S <- x$S
+  I <- x$I
+  R <- x$R
+  N <- x$N
   beta <- SIR_parms["beta"]
   gamma <- SIR_parms["gamma"]
   
-  #c(new infections, recoveries)
-  rates <- c(beta*S*I/N,
-             gamma*I
-  )
-  rates <- rpois(n=length(rates), lambda=as.numeric(rates))
-  x[1:3] <- x[1:3] + c(-1*rates[1], rates[1]-rates[2], rates[2])
+  prob <- c(1-exp(-1*beta*S*I/N),
+            1-exp(-1*gamma))
+  num <- c(rbinom(1,S,prob[1]),
+           rbinom(1,I,prob[2]))
+  
+  x[1:3] <- x[1:3] + c(-1*num[1], num[1]-num[2], num[2])
   return(x)
 }
 
