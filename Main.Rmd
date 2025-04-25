@@ -61,7 +61,7 @@ source("Functions/single_day.R")
 ```{r Movement Vis}
 roost_series <- list()
 roost_series[[1]] <- roosts
-for(i in 2:1000) {
+for(i in 2:250) {
   roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.1, roost_dist)
   #if(i%%200==0) {
    # roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
@@ -70,7 +70,7 @@ roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_ser
 
 for(i in 1:length(roost_series)) {
   for(j in 1:roost_parms[1]) {
-    roost_vec[i,j] = roost_series[[i]]$N[j]
+    roost_vec[i,j] = roost_series[[i]]$N[j]#/roost_series[[i]]$N_max[j]
   }
 }
 colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))

@@ -15,7 +15,7 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist) {
     R = vector("numeric", length=num_roosts),
     N = vector("numeric", length=num_roosts)
   )
-  
+  phi_max=0.25
   for(i in 1:num_roosts) {
     phi <- phi_max*(1-scores[i])
     #Number from each compartment leaving
@@ -40,7 +40,7 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist) {
   for(i in 1:num_roosts) {
     #Decay function for j being destination
     #Exponential base may be an interesting way to alter dispersal distance
-    pi <- (1/100)^roost_dist[i,]*(roosts$N/roosts$N_max+0.1) #must add 0.1 so roosts can be recolonized
+    pi <- (1/50)^roost_dist[i,]*(roosts$N/roosts$N_max+0.05) #must add 0.1 so roosts can be recolonized
     for(k in 1:length(pi)) {
       if (roosts$N[k]>=roosts$N_max[k]) {
         pi[k]=0
@@ -84,7 +84,7 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist) {
   return(roosts)
 }
 
-#We want to sometimes remove roosts from the system
+b#We want to sometimes remove roosts from the system
 #Determine where these bats go
 
 deleteRoost <- function(roosts, roost_index) {
