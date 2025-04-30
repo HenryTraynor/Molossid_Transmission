@@ -15,21 +15,22 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist) {
     R = vector("numeric", length=num_roosts),
     N = vector("numeric", length=num_roosts)
   )
-  phi_max=0.25
   for(i in 1:num_roosts) {
     phi <- phi_max*(1-scores[i])
     #Number from each compartment leaving
     N_i <-  rbinom(1, roosts$N[i], phi)
     emigrant_bats$N[i] <- N_i
-    #x is stored to determine list of probablities when drawing bats from compartments w/o replacement
-    x <- as.numeric(roosts[i,1:3])
-    for(j in 1:N_i) {
-      #if statement so we dont draw from zero bats
-      if(!all(x==0)) {
-        k <- sample.int(3, 1, prob=x)
-        emigrant_bats[i,k] <- emigrant_bats[i,k] + 1
-        #update roost values for prob.
-        x[k] <- x[k]-1
+    if(N_i > 0) {
+      #x is stored to determine list of probabilities when drawing bats from compartments w/o replacement
+      x <- as.numeric(roosts[i,1:3])
+      for(j in 1:N_i) {
+        #if statement so we dont draw from zero bats
+        if(!all(x<=0)) {
+          k <- sample.int(3, 1, prob=x, replace=TRUE)
+          emigrant_bats[i,k] <- emigrant_bats[i,k] + 1
+          #update roost values for prob.
+          x[k] <- x[k]-1
+        }
       }
     }
     #update N
@@ -84,7 +85,7 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist) {
   return(roosts)
 }
 
-b#We want to sometimes remove roosts from the system
+#We want to sometimes remove roosts from the system
 #Determine where these bats go
 
 deleteRoost <- function(roosts, roost_index) {
@@ -101,33 +102,22 @@ deleteRoost <- function(roosts, roost_index) {
   
   #Decay function for j being destination
   #Exp base may be an interesting way to alter dispersal distance
-  pi <- (1/100)^roost_dist[roost_index,]*(roosts$N/roosts$N_max)
+  pi <- (1/50)^roost_dist[roost_index,]*(roosts$N/roosts$N_max+0.05)
   for(k in 1:length(pi)) {
-    if (roosts$N[k]>=roosts$N_max[k]) {
+    if (roosts$N[k]>=roosts$N_max[k] || k==roost_index) {
       pi[k]=0
     }
   }
-  pi[roost_index]=0
-  #if size==0, dont sample and set destination to 0
-  if(emigrant_bats$S !=0 && !is.na(emigrant_bats$S)) {
-    destinationS <- sample.int(num_roosts, size=emigrant_bats$S, replace=TRUE, prob=pi)
-    
-    for(j in 1:length(destinationS)) {
-      immigrant_bats$S[destinationS[j]] <- immigrant_bats$S[destinationS[j]] + 1
-    }
-  }
-  if(emigrant_bats$I !=0 && !is.na(emigrant_bats$I)) {
-    destinationI <- sample.int(num_roosts, size=emigrant_bats$I, replace=TRUE, prob=pi)
-    
-    for(j in 1:length(destinationI)) {
-      immigrant_bats$I[destinationI[j]] <- immigrant_bats$I[destinationI[j]] + 1
-    }
-  }
-  if(emigrant_bats$R !=0 && !is.na(emigrant_bats$R)) {
-    destinationR <- sample.int(num_roosts, size=emigrant_bats$R, replace=TRUE, prob=pi)
-    
-    for(j in 1:length(destinationR)) {
-      immigrant_bats$R[destinationR[j]] <- immigrant_bats$R[destinationR[j]] + 1
+  for(k in 1:3) {
+    if(emigrant_bats[k] != 0) {
+      #gives vector of destinations
+      destinations <- sample.int(num_roosts,
+                                 size=emigrant_bats[k],
+                                 replace=TRUE,
+                                 prob=pi)
+      for(j in 1:length(destinations)) {
+        immigrant_bats[destinations[j],k] <- immigrant_bats[destinations[j],k] + 1
+      }
     }
   }
   
