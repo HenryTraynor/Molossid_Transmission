@@ -61,11 +61,9 @@ source("Functions/single_day.R")
 ```{r Movement Vis}
 roost_series <- list()
 roost_series[[1]] <- roosts
-for(i in 2:250) {
-  roost_series[[i]] = movement(as.data.frame(roost_series[[i-1]]), num_roosts=10, phi_max=0.1, roost_dist)
-  #if(i%%200==0) {
-   # roost_series[[i]] <- deleteRoost(as.data.frame(roost_series[[i]]), sample(1:roost_parms[1], 1))
-  }
+for(i in 2:1000) {
+  roost_series[[i]] = movement2(as.data.frame(roost_series[[i-1]]), num_roosts=roost_parms[1], phi_max=0.25, roost_dist, scores)
+}
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
 for(i in 1:length(roost_series)) {
@@ -97,10 +95,7 @@ ggplot(data=roost_vec,aes(t)) +
 roost_series <- list()
 roost_series[[1]] <- roosts
 for(i in 2:500) {
-  roost_series[[i]] = singleDay(roost_series[[i-1]], roost_dist, roost_parms, SIR_parms, num_roosts = roost_parms[1], phi_max=0.25)
-  #if(i%%20==0) {
-  #  roosts <- deleteRoost(roosts, sample(1:10,1))
-  #}
+  roost_series[[i]] = singleDay(roost_series[[i-1]], roost_dist, roost_parms, SIR_parms, scores, phi_max=0.25)
 }
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
@@ -249,4 +244,5 @@ recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
 ```{r Visualization}
 library(gridExtra)
 grid.arrange(tot, prop,susc, inft, recv)
+
 ```
