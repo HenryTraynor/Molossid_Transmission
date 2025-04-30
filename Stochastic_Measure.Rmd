@@ -15,9 +15,7 @@ We want to create a set of realizations with a single set of parameters and exam
 First, we create a roost map.
 
 ```{r}
-set.seed(314159)
-
-SIR_parms  <- c(beta = 0.1, #transmission rate
+SIR_parms  <- c(beta = 0.05, #transmission rate
                 gamma = 0.03) # recovery rate
 
 roost_parms <- c(num_roosts = 10,  # number of roosts
@@ -44,9 +42,9 @@ roosts <- data.frame(
 )
 
 #Populate Roosts
-roosts$N <- round(roosts$N_max/1.5)
-roosts$S <- roosts$N-1
-roosts$I <- roosts$N-roosts$S
+roosts$N <- round(roosts$N_max/2)
+roosts$S <- roosts$N
+roosts[1,1:2] <- c(roosts$S[1]-1,1)
 
 #Total distances between any 2 roosts
 total_dist <- 0
@@ -69,13 +67,42 @@ Next, we create a set of realizations and record values for a single roost.
 ```{r}
 roost_series_series <- list()
 
-for(i in 1:10) {
+num_realizations <- 50
+num_days <- 150
+roost_index <- 2
+
+for(i in 1:num_realizations) {
   roost_series <- list()
-  for(j in 2:500) {
-    roost_series[[j]] = singleDay(roost_series[[j-1]], roost_dist, roost_parms, SIR_parms, num_roosts = roost_parms[1], phi_max=0.2)
+  roost_series[[1]] <- roosts
+  for(j in 2:num_days) {
+    roost_series[[j]] <- singleDay(roost_series[[j-1]],
+                                   roost_dist,
+                                   roost_parms, 
+                                   SIR_parms, 
+                                   scores)
   }
   roost_series_series[[i]] <- roost_series
 }
 
+single_roost_series <- list()
+for(i in 1:num_realizations) {
+  df <- data.frame(time = seq(1,num_days),
+                   S = vector("numeric", num_days),
+                   I = vector("numeric", num_days),
+                   R = vector("numeric", num_days),
+                   N = vector("numeric", num_days))
+  for(j in 1:num_days) {
+    df[j,2:5] <- roost_series_series[[i]][[j]][roost_index,1:4]
+  }
+  single_roost_series[[i]] <- df
+}
+
+library(dplyr)
+#choose variable of interest
+graph <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
+                aes(time, N, color=data_frame)) +
+  geom_line()
+
+print(graph)
 ```
 
