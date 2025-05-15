@@ -17,12 +17,6 @@ SIRleap <- function(y, SIR_parms) {
            rbinom(1,I,prob[2]))
   
   y[1:3] <- y[1:3] + c(-1*num[1], num[1]-num[2], num[2])
-  for(i in 1:length(y)) {
-    if(y[i] < 0 || is.na(y[i])) {
-      browser()
-      #y[i] <- 0
-    }
-  }
   return(y)
 }
 
@@ -34,19 +28,7 @@ daytime <- function(roosts, roost_parms, SIR_parms, model="SIR") {
       y <- roosts[i,1:4]
       y <- SIRleap(y, SIR_parms)
       roosts[i,1:4] <- y
-      for(j in 1:length(y)) {
-        if(y[j]< 0 || is.na(y[j])) {
-          browser()
-        }
-      }
     }
   }
   return(roosts)
-}
-
-roost_series <- list()
-roost_series[[1]] <- roosts
-
-for(i in 2:500) {
-  roost_series[[i]] <- daytime(roost_series[[i-1]], roost_parms, SIR_parms, model="SIR")
 }
