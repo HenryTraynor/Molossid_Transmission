@@ -2,10 +2,18 @@
 title: "Main"
 author: "Henry Traynor"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
-```{r Initialization}
+## Introduction
+
+As building structures in rural Kenya modernize, bats are able to roosts in homes in higher numbers than previous, increasing exposure risk and potentially altering the spatial patterns of bats infected with Bombali ebolavirus (BOMV). I have created a model to simulate BOMV epidemics in either a computer-generated or real landscapes of roosts to determine how changing roost size will impact the persistence, peak size, force of infection, and spatial extent of BOMV epidemics. Here, I detail this model.
+
+First, we define some important model parameters. The model uses SIR dynamics with constant population size, so we only need a transmission and recovery rate. The landscape of roosts is created with three important parameters. `num_roosts` is the total number of desired roosts. `num_clusters` describes the number of spatial clusters we want on the landscape. `sd` is the desired standard deviation of roosts within a single cluster.
+
+```{r Parameters}
 #Define SIR Model Parameters
 SIR_parms  <- c(beta = 0.1, #transmission rate
                 gamma = 0.03) # recovery rate
@@ -15,6 +23,8 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
                  sd = 0.1)           # standard distance from cluster center
 ```
 
+`roostMap()` creates a map of roosts on the unit square. It selects the first `num_clusters` roosts to be the centers of each cluster, and there location is determined by a uniform distribution across (0,1) for **x** and **y**. The remaining `num_roosts`-`num_clusters` roosts are randomly sorted into a cluster. Their location is then determined by a truncated normal distribution centered on the first roost in the respective cluster. Each roost is assigned a maximum occupancy at random. We also create a matrix storing pairwise distances between roosts in `roost_dist`.
+
 ```{r Roost Creation}
 source("Functions/roost_map.R")
 roost_map <- roostMap(roost_parms)
@@ -23,8 +33,11 @@ roost_dist <- distMatrix(roost_parms[1], roost_map)
 library(ggplot2)
 ggplot(roost_map, aes(x,y, color=bin, label = lbl, size=N_max)) + geom_text() + xlim(0,1) + ylim(0,1)
 ```
+Next, we create a dataframe storing the number of susceptible (*S*), infected(*I*), recovered (*R*), and total bats (*N*) in  each roost. These roosts are populated with two-thirds of their maximum occupancy, and a single infected individual.
 
-```{r SIR Roosts}
+A vector of `scores` is created to determine the connectivity of each roost. A roost's `score` is the sum of its distance from every other roost divided by the total distance in the system.
+
+```{r Roosts}
 roosts <- data.frame(
   S = vector("numeric", length=roost_parms[1]),
   I = vector("numeric", length=roost_parms[1]),
@@ -53,6 +66,8 @@ for(i in 1:roost_parms[1]) {
   scores[i] <- tot/total_dist
 }
 ```
+
+
 
 ```{r Movement}
 source("Functions/single_day.R")
