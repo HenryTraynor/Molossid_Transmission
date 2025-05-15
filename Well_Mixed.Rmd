@@ -9,22 +9,260 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+Here, we want to determine the behavior of our model in the absence of spatial structure. The only spatially-dependent components of our model is the sorting of immigrants into new roosts and the proportion of fidelitous bats. We augment 'movement2()' to be solely a function of roost occupancy.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+no attractiveness from roost size, still cap roost at maximum (try both)
+nor spatial structure
+set phi max to 100% e.g.
 
-```{r cars}
-summary(cars)
+```{r New movement function}
+well_mixed_movement <- function(roosts, num_roosts) {
+  num_roosts <- length(roosts[,1])
+  sample.vec <- function(x, ...) x[sample(length(x), ...)]
+  
+  #matrix storing num bats in each compartment that leave roost i
+  emigrant_bats <- data.frame(
+    S = vector("numeric", length=num_roosts),
+    I = vector("numeric", length=num_roosts),
+    R = vector("numeric", length=num_roosts),
+    N = vector("numeric", length=num_roosts)
+  )
+  #matrix storing num bats that travel to roost i
+  immigrant_bats <- data.frame(
+    S = vector("numeric", length=num_roosts),
+    I = vector("numeric", length=num_roosts),
+    R = vector("numeric", length=num_roosts),
+    N = vector("numeric", length=num_roosts)
+  )
+  
+  for(i in 1:num_roosts) {
+    phi <- 1
+    #Number leaving each compartment
+    N_e <- rbinom(1, roosts$N[i], phi)
+    emigrant_bats$N[i] <- N_e
+    if(N_e > 0) {
+      x <- c(rep(1, roosts$S[i]),
+             rep(2, roosts$I[i]),
+             rep(3, roosts$R[i]))
+      samp <- sample.vec(x, N_e)
+      for(j in 1:N_e) {
+        emigrant_bats[i,samp[j]] <- emigrant_bats[i,samp[j]] + 1
+        if(emigrant_bats[i,samp[j]] > roosts[i,samp[j]]) {
+          browser()
+        }
+      }
+    }
+    emigrant_bats$N[i] <- sum(emigrant_bats[i,1:3])
+  }
+  
+  #Subtract these bats from home roost
+  roosts[,1:4] <- roosts[,1:4] - emigrant_bats
+  
+  #Determine which roosts bats are traveling to and store in immigrant_bats
+  for(i in 1:num_roosts) {
+    pi <- rep(1, num_roosts)
+    
+    #for loop to set immigration zero for roosts at max occupancy and prevents returning to original roost
+    for(k in 1:length(pi)) {
+      if(roosts$N[k]>= roosts$N_max[k] || i==k) {
+        pi[k] <- 0
+      }
+    }
+    for(k in 1:3) {
+      if(emigrant_bats[i,k] != 0) {
+        #gives vector of destinations
+        destinations <- sample.int(num_roosts,
+                                   size=emigrant_bats[i,k],
+                                   replace=TRUE,
+                                   prob=pi)
+        for(j in 1:length(destinations)) {
+          immigrant_bats[destinations[j],k] <- immigrant_bats[destinations[j],k] + 1
+        }
+      }
+    }
+  }
+  
+  #Re-tally N for immigrants
+  for(i in 1:num_roosts) {
+    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
+  }
+  
+  #Add immigrants to new roosts
+  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
+  
+  for(i in 1:num_roosts) {
+    for(j in 1:4) {
+      if(roosts[i,j] < 0 || is.na(roosts[i,j])) {
+        browser()
+      }
+    }
+  }
+  return(roosts)
+}
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+singleDayWellMixed <- function(roosts, roost_parms, SIR_parms) {
+  new_roosts <- well_mixed_movement(roosts, num_roosts=roost_parms[1])
+  new_roosts <- daytime(new_roosts, roost_parms, SIR_parms)
+  return(new_roosts)
+}
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r total Vis}
+roost_series <- list()
+roost_series[[1]] <- roosts
+for(i in 2:500) {
+  roost_series[[i]] = singleDayWellMixed(roost_series[[i-1]], roost_parms, SIR_parms)
+}
+roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vec[i,j] = roost_series[[i]]$N[j]
+  }
+}
+colnames(roost_vec) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vec <- as.data.frame(roost_vec)
+roost_vec <- cbind(roost_vec,seq(1:length(roost_vec$Roost1)))
+colnames(roost_vec)[length(colnames(roost_vec))] <- "t"
+
+tot <- ggplot(data=roost_vec[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Occupancy") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Total Roost Occupancy")+ theme(legend.position="none")
+```
+
+```{r % occupancy}
+roost_vecP <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecP[i,j] = roost_series[[i]]$N[j]/roost_series[[i]]$N_max[j]
+  }
+}
+colnames(roost_vecP) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecP <- as.data.frame(roost_vecP)
+roost_vecP <- cbind(roost_vecP,seq(1:length(roost_vecP$Roost1)))
+colnames(roost_vecP)[length(colnames(roost_vecP))] <- "t"
+
+prop <- ggplot(data=roost_vecP[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Occupancy") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("% Roost Occupancy")+ theme(legend.position="none")
+```
+
+```{r Susc. Vis}
+roost_vecS <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecS[i,j] = roost_series[[i]]$S[j]
+  }
+}
+colnames(roost_vecS) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecS <- as.data.frame(roost_vecS)
+roost_vecS <- cbind(roost_vecS,seq(1:length(roost_vecS$Roost1)))
+colnames(roost_vecS)[length(colnames(roost_vecS))] <- "t"
+
+susc <- ggplot(data=roost_vecS[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Susc. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Susceptible Population")+ theme(legend.position="none")
+```
+
+```{r Inf. Vis}
+roost_vecI <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecI[i,j] = roost_series[[i]]$I[j]
+  }
+}
+colnames(roost_vecI) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecI <- as.data.frame(roost_vecI)
+roost_vecI <- cbind(roost_vecI,seq(1:length(roost_vecI$Roost1)))
+colnames(roost_vecI)[length(colnames(roost_vecI))] <- "t"
+
+inft <- ggplot(data=roost_vecI[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Inf. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Infected Population")+ theme(legend.position="none")
+```
+
+```{r Rec. Vis}
+roost_vecR <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
+
+for(i in 1:length(roost_series)) {
+  for(j in 1:roost_parms[1]) {
+    roost_vecR[i,j] = roost_series[[i]]$R[j]
+  }
+}
+colnames(roost_vecR) <- paste0("Roost",as.character(seq(1:roost_parms[1])))
+roost_vecR <- as.data.frame(roost_vecR)
+roost_vecR <- cbind(roost_vecR,seq(1:length(roost_vecR$Roost1)))
+colnames(roost_vecR)[length(colnames(roost_vecR))] <- "t"
+
+recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
+  geom_line(aes(y=Roost1, color="Roost 1")) +
+  geom_line(aes(y=Roost2, color="Roost 2")) +
+  geom_line(aes(y=Roost3, color="Roost 3")) +
+  geom_line(aes(y=Roost4, color="Roost 4")) +
+  geom_line(aes(y=Roost5, color="Roost 5")) +
+  geom_line(aes(y=Roost6, color="Roost 6")) +
+  geom_line(aes(y=Roost7, color="Roost 7")) +
+  geom_line(aes(y=Roost8, color="Roost 8")) +
+  geom_line(aes(y=Roost9, color="Roost 9")) +
+  geom_line(aes(y=Roost10, color="Roost 10")) +
+  ylab("Roost Inf. Population") + xlab("Time (Days)") +
+  labs(colour="Roost #") +
+  ggtitle("Recovered Population")+ theme(legend.position="none")
+```
+
+```{r Visualization}
+library(gridExtra)
+grid.arrange(tot, prop,susc, inft, recv)
+
+```
+
