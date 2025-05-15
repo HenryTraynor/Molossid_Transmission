@@ -23,7 +23,6 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
                  sd = 0.1)           # standard distance from cluster center
 
 source("Functions/roost_map.R")
-source("Functions/single_day.R")
 
 roost_map <- roostMap(roost_parms)
 roost_dist <- distMatrix(roost_parms[1], roost_map)
@@ -65,9 +64,10 @@ for(i in 1:roost_parms[1]) {
 Next, we create a set of realizations and record values for a single roost.
 
 ```{r}
+source("Functions/single_day.R")
 roost_series_series <- list()
 
-num_realizations <- 50
+num_realizations <- 10
 num_days <- 150
 roost_index <- 2
 
@@ -99,9 +99,13 @@ for(i in 1:num_realizations) {
 
 library(dplyr)
 #choose variable of interest
+title <- paste0("10 Realizations of the Model: Roost ",roost_index)
 graph <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
                 aes(time, N, color=data_frame)) +
-  geom_line()
+  geom_line() +
+  ggtitle(title) +
+  guides(color = guide_legend(title = "Realization")) 
+
 
 print(graph)
 ```
