@@ -1,3 +1,5 @@
+## possibly depricated. Use movement_func but don't delete yet bc im scared
+
 movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   sample.vec <- function(x, ...) x[sample(length(x), ...)]
   
