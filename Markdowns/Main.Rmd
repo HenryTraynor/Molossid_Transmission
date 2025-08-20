@@ -137,7 +137,7 @@ tot <- ggplot(data=roost_vec[1:250,],aes(t)) +
   geom_line(aes(y=Roost10, color="Roost 10")) +
   ylab("Roost Occupancy") + xlab("Time (Days)") +
   labs(colour="Roost #") +
-  ggtitle("Total Roost Occupancy")
+  ggtitle("Total Roost Occupancy")+ theme(legend.position="none")
 ```
 
 ```{r % occupancy}
@@ -166,7 +166,7 @@ prop <- ggplot(data=roost_vecP[1:250,],aes(t)) +
   geom_line(aes(y=Roost10, color="Roost 10")) +
   ylab("Roost Occupancy") + xlab("Time (Days)") +
   labs(colour="Roost #") +
-  ggtitle("Total Roost Occupancy")
+  ggtitle("% Roost Occupancy")+ theme(legend.position="none")
 ```
 
 ```{r Susc. Vis}
@@ -195,7 +195,7 @@ susc <- ggplot(data=roost_vecS[1:250,],aes(t)) +
   geom_line(aes(y=Roost10, color="Roost 10")) +
   ylab("Roost Susc. Population") + xlab("Time (Days)") +
   labs(colour="Roost #") +
-  ggtitle("Susceptible Population")
+  ggtitle("Susceptible Population")+ theme(legend.position="none")
 ```
 
 ```{r Inf. Vis}
@@ -224,7 +224,7 @@ inft <- ggplot(data=roost_vecI[1:250,],aes(t)) +
   geom_line(aes(y=Roost10, color="Roost 10")) +
   ylab("Roost Inf. Population") + xlab("Time (Days)") +
   labs(colour="Roost #") +
-  ggtitle("Infected Population")
+  ggtitle("Infected Population")+ theme(legend.position="none")
 ```
 
 ```{r Rec. Vis}
@@ -253,7 +253,7 @@ recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
   geom_line(aes(y=Roost10, color="Roost 10")) +
   ylab("Roost Inf. Population") + xlab("Time (Days)") +
   labs(colour="Roost #") +
-  ggtitle("Recovered Population")
+  ggtitle("Recovered Population")+ theme(legend.position="none")
 ```
 
 ```{r Visualization}
