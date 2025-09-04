@@ -20,6 +20,28 @@ SIRleap <- function(y, SIR_parms) {
   return(y)
 }
 
+SILIleap <- function(y, SILI_parms) {
+  S <- y$S
+  I <- y$I
+  L <- y$R
+  N <- y$N
+     
+  
+  if(N<=0) {
+    prob <- c(0,
+              1-exp(-1*gamma))
+  }
+  else {
+    prob <- c(1-exp(-1*beta*S*I/N),
+              1-exp(-1*gamma))
+  }
+  num <- c(rbinom(1,S,prob[1]),
+           rbinom(1,I,prob[2]))
+  
+  y[1:3] <- y[1:3] + c(-1*num[1], num[1]-num[2], num[2])
+  return(y)
+}
+
 #applies SIRleap() to all roosts
 #model arg will become non-default to allow for changes in model compartments
 daytime <- function(roosts, roost_parms, SIR_parms, model="SIR") {

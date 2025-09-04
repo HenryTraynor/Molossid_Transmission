@@ -6,7 +6,6 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
     S = vector("numeric", length=num_roosts),
     I = vector("numeric", length=num_roosts),
     R = vector("numeric", length=num_roosts),
-    L = vector("numeric", length=num_roosts),
     N = vector("numeric", length=num_roosts)
   )
   #matrix storing num bats that travel to roost i
@@ -14,7 +13,6 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
     S = vector("numeric", length=num_roosts),
     I = vector("numeric", length=num_roosts),
     R = vector("numeric", length=num_roosts),
-    L = vector("numeric", length=num_roosts),
     N = vector("numeric", length=num_roosts)
   )
   
@@ -26,18 +24,22 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
     if(N_e > 0) {
       x <- c(rep(1, roosts$S[i]),
              rep(2, roosts$I[i]),
-             rep(3, roosts$R[i]),
-             rep(4, roosts$L[i]))
+             rep(3, roosts$R[i]))
       samp <- sample.vec(x, N_e)
       for(j in 1:N_e) {
         emigrant_bats[i,samp[j]] <- emigrant_bats[i,samp[j]] + 1
       }
     }
-    emigrant_bats$N[i] <- sum(emigrant_bats[i,1:4])
+    emigrant_bats$N[i] <- sum(emigrant_bats[i,1:3])
   }
   
   #Subtract these bats from home roost
-  roosts[,1:5] <- roosts[,1:5] - emigrant_bats
+  roosts[,1:4] <- roosts[,1:4] - emigrant_bats
+  
+  for(i in 1:num_roosts) {
+    for(j in 1:4) {
+    }
+  }
   
   #Determine which roosts bats are traveling to and store in immigrant_bats
   for(i in 1:num_roosts) {
@@ -52,7 +54,7 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
         pi[k] <- 0
       }
     }
-    for(k in 1:4) {
+    for(k in 1:3) {
       if(emigrant_bats[i,k] != 0) {
         #gives vector of destinations
         destinations <- sample.int(num_roosts,
@@ -68,11 +70,11 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   
   #Re-tally N for immigrants
   for(i in 1:num_roosts) {
-    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:4])
+    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
   }
   
   #Add immigrants to new roosts
-  roosts[,1:5] <- roosts[,1:5] + immigrant_bats
+  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
   
   return(roosts)
 }
@@ -83,13 +85,12 @@ movement <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
 deleteRoost <- function(roosts, roost_index) {
   num_roosts <- roost_parms[1]
   #Bats leaving 'roost_index'
-  emigrant_bats <- roosts[roost_index,1:5]
+  emigrant_bats <- roosts[roost_index,1:4]
   #Bat destinations
   immigrant_bats <- data.frame(
     S = vector("numeric", length=num_roosts),
     I = vector("numeric", length=num_roosts),
     R = vector("numeric", length=num_roosts),
-    L = vector("numeric", length=num_roosts),
     N = vector("numeric", length=num_roosts)
   )
   
@@ -101,7 +102,7 @@ deleteRoost <- function(roosts, roost_index) {
       pi[k] <- 0
     }
   }
-  for(k in 1:4) {
+  for(k in 1:3) {
     if(emigrant_bats[k] != 0) {
       #gives vector of destinations
       destinations <- sample.int(num_roosts,
@@ -115,13 +116,13 @@ deleteRoost <- function(roosts, roost_index) {
   }
   
   for(i in 1:num_roosts) {
-    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:4])
+    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
   }
   
   #Subtract emigrants
   roosts[roost_index,] <- c(0,0,0,0,0)
   #Add immigrants
-  roosts[,1:5] <- roosts[,1:5] + immigrant_bats
+  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
   
   return(roosts)
 }

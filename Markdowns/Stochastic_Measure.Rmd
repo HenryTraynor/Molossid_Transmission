@@ -22,8 +22,6 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
                  num_clusters = 3, # number of clusters
                  sd = 0.1)           # standard distance from cluster center
 
-source("Functions/roost_map.R")
-
 roost_map <- roostMap(roost_parms)
 roost_dist <- distMatrix(roost_parms[1], roost_map)
 
@@ -64,7 +62,6 @@ for(i in 1:roost_parms[1]) {
 Next, we create a set of realizations and record values for a single roost.
 
 ```{r}
-source("Functions/single_day.R")
 roost_series_series <- list()
 
 num_realizations <- 10

@@ -23,10 +23,16 @@ roost_parms <- c(num_roosts = 10,  # number of roosts
                  sd = 0.1)           # standard distance from cluster center
 ```
 
+```{r Sourcing}
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for(file in files_functions) {
+  source(file)
+}
+```
+
 `roostMap()` creates a map of roosts on the unit square. It selects the first `num_clusters` roosts to be the centers of each cluster, and there location is determined by a uniform distribution across (0,1) for **x** and **y**. The remaining `num_roosts`-`num_clusters` roosts are randomly sorted into a cluster. Their location is then determined by a truncated normal distribution centered on the first roost in the respective cluster. Each roost is assigned a maximum occupancy at random. We also create a matrix storing pairwise distances between roosts in `roost_dist`.
 
 ```{r Roost Creation}
-source("Functions/roost_map.R")
 roost_map <- roostMap(roost_parms)
 roost_dist <- distMatrix(roost_parms[1], roost_map)
 
@@ -48,7 +54,8 @@ roosts <- data.frame(
 
 #Populate Roosts
 roosts$N <- round(roosts$N_max/1.5)
-roosts$S <- roosts$N-1
+roosts$S <- roosts$N
+roosts$S[1] <- roosts$S[1]-1
 roosts$I <- roosts$N-roosts$S
 
 #Total distances between any 2 roosts
@@ -65,12 +72,6 @@ for(i in 1:roost_parms[1]) {
   tot <- sum(roost_dist[i,])
   scores[i] <- tot/total_dist
 }
-```
-
-
-
-```{r Movement}
-source("Functions/single_day.R")
 ```
 
 ```{r Movement Vis}
