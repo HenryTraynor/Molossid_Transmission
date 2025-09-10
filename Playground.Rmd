@@ -1,0 +1,83 @@
+---
+title: "Playground"
+author: "Henry Traynor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Playground}
+# script for messing with code and developing new functions/figures
+
+SIRS_parms  <- c(beta = 0.01, #transmission rate
+                 gamma = 0.01, #recovery rate
+                 mu = 0.01) # waning immunity
+
+SIRSleap <- function(y, SIRS_parms) {
+  S <- y$S
+  I <- y$I
+  R <- y$R
+  N <- y$N
+  beta <- SIRS_parms["beta"]
+  gamma <- SIRS_parms["gamma"]
+  mu <- SIRS_parms["mu"]
+  
+  if(N<=0) {
+    prob <- c(0,
+              0,
+              0)
+  }
+  else {
+    # prob <- c(infection, recovering, immunity wanes)
+    prob <- c(1-exp(-1*beta*S*I/N),
+              1-exp(-1*gamma),
+              1-exp(-1*mu))
+  }
+  num <- c(rbinom(1,S,prob[1]), # infections
+           rbinom(1,I,prob[2]), # recoveries
+           rbinom(1,R,prob[3])) # losses of immunity
+  
+  y[1:3] <- y[1:3] + c(num[3]-num[1], num[1]-num[2], num[2]-num[3])
+  return(y)
+}
+
+#SIRSleap test
+SIRS_list <- list()
+SIRS_list[[1]] <- roosts[1,]
+for(i in 2:50) {
+  SIRS_list[[i]] <- SIRSleap(SIRS_list[[i-1]],
+                             SIRS_parms)
+}
+
+#daytime rest
+SIRS_list <- list()
+SIRS_list[[1]] <- roosts
+for(i in 2:50) {
+  SIRS_list[[i]] <- daytime(SIRS_list[[i-1]],
+                            roost_parms,
+                            SIRS_parms,
+                            model="SIRS")
+}
+
+#singleDay test
+SIRS_list <- list()
+SIRS_list[[1]] <- roosts
+for(i in 2:500) {
+  SIRS_list[[i]] <- singleDay(SIRS_list[[i-1]],
+                              roost_dist,
+                              roost_parms,
+                              SIRS_parms,
+                              model="SIRS",
+                              scores,
+                              phi_max=0.25)
+}
+
+svec <- c()
+for(i in 1:length(SIRS_list)) {
+  svec[i] <- sum(SIRS_list[[i]]$I)
+}
+svec
+```
