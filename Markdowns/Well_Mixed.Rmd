@@ -16,6 +16,43 @@ no attractiveness from roost size, still cap roost at maximum (try both)
 nor spatial structure
 set phi max to 100% e.g.
 
+```{r Sourcing}
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for(file in files_functions) {
+  source(file)
+}
+```
+
+```{r}
+SIR_parms  <- c(beta = 0.05, #transmission rate
+                gamma = 0.03) # recovery rate
+
+roost_parms <- c(num_roosts = 10,  # number of roosts
+                 num_clusters = 3, # number of clusters
+                 sd = 0.1)           # standard distance from cluster center
+
+roost_map <- roostMap(roost_parms)
+roost_dist <- distMatrix(roost_parms[1], roost_map)
+
+library(ggplot2)
+ggplot(roost_map, aes(x,y, color=bin, label = lbl, size=N_max)) + geom_text() + xlim(0,1) + ylim(0,1)
+```
+
+```{r}
+roosts <- data.frame(
+  S = vector("numeric", length=roost_parms[1]),
+  I = vector("numeric", length=roost_parms[1]),
+  R = vector("numeric", length=roost_parms[1]),
+  N = vector("numeric", length=roost_parms[1]),
+  N_max = roost_map$N_max
+)
+
+#Populate Roosts
+roosts$N <- round(roosts$N_max/2)
+roosts$S <- roosts$N
+roosts[1,1:2] <- c(roosts$S[1]-1,1)
+```
+
 ```{r New movement function}
 well_mixed_movement <- function(roosts, num_roosts) {
   num_roosts <- length(roosts[,1])
@@ -262,7 +299,8 @@ recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
 
 ```{r Visualization}
 library(gridExtra)
-grid.arrange(tot, prop,susc, inft, recv)
+p <- grid.arrange(tot, prop,susc, inft, recv,
+                  top = "Well Mixed System")
 
 ```
 
