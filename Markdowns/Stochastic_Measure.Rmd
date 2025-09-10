@@ -75,7 +75,8 @@ for(i in 1:num_realizations) {
     roost_series[[j]] <- singleDay(roost_series[[j-1]],
                                    roost_dist,
                                    roost_parms, 
-                                   SIR_parms, 
+                                   SIR_parms,
+                                   model="SIR",
                                    scores)
   }
   roost_series_series[[i]] <- roost_series
@@ -97,13 +98,28 @@ for(i in 1:num_realizations) {
 library(dplyr)
 #choose variable of interest
 title <- paste0("10 Realizations of the Model: Roost ",roost_index)
-graph <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
+graphN <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
                 aes(time, N, color=data_frame)) +
   geom_line() +
-  ggtitle(title) +
+  #ggtitle(title) +
   guides(color = guide_legend(title = "Realization")) 
 
+graphS <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
+                aes(time, S, color=data_frame)) +
+  geom_line() +
+  #ggtitle(title) +
+  guides(color = guide_legend(title = "Realization")) 
+graphI <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
+                aes(time, I, color=data_frame)) +
+  geom_line() +
+  #ggtitle(title) +
+  guides(color = guide_legend(title = "Realization")) 
+graphR <- ggplot(bind_rows(single_roost_series, .id="data_frame"),
+                aes(time, R, color=data_frame)) +
+  geom_line() +
+  #ggtitle(title) +
+  guides(color = guide_legend(title = "Realization")) 
 
-print(graph)
+grid.arrange(graphN, graphS, graphI, graphR, top="Time series for a single roost for 10 realizations")
 ```
 
