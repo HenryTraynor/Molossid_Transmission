@@ -111,7 +111,7 @@ ggplot(data=roost_vec,aes(t)) +
 roost_series <- list()
 roost_series[[1]] <- roosts
 for(i in 2:500) {
-  roost_series[[i]] = singleDay(roost_series[[i-1]], roost_dist, roost_parms, SIR_parms, scores, phi_max=0.25)
+  roost_series[[i]] = singleDay(roost_series[[i-1]], roost_dist, roost_parms, SIR_parms, "SIR", scores, phi_max=0.25)
 }
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
