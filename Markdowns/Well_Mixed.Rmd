@@ -27,6 +27,10 @@ for(file in files_functions) {
 SIR_parms  <- c(beta = 0.05, #transmission rate
                 gamma = 0.03) # recovery rate
 
+SIRS_parms  <- c(beta = 0.1, #transmission rate
+                 gamma = 0.07, #recovery rate (14 day inf)
+                 mu = 0.0055) # waning immunity (180 day immunity)
+
 roost_parms <- c(num_roosts = 10,  # number of roosts
                  num_clusters = 3, # number of clusters
                  sd = 0.1)           # standard distance from cluster center
@@ -140,9 +144,9 @@ well_mixed_movement <- function(roosts, num_roosts) {
 ```
 
 ```{r}
-singleDayWellMixed <- function(roosts, roost_parms, SIR_parms) {
+singleDayWellMixed <- function(roosts, roost_parms, inf_parms, model) {
   new_roosts <- well_mixed_movement(roosts, num_roosts=roost_parms[1])
-  new_roosts <- daytime(new_roosts, roost_parms, SIR_parms)
+  new_roosts <- daytime(new_roosts, roost_parms, SIRS_parms, model)
   return(new_roosts)
 }
 ```
@@ -151,7 +155,7 @@ singleDayWellMixed <- function(roosts, roost_parms, SIR_parms) {
 roost_series <- list()
 roost_series[[1]] <- roosts
 for(i in 2:500) {
-  roost_series[[i]] = singleDayWellMixed(roost_series[[i-1]], roost_parms, SIR_parms)
+  roost_series[[i]] = singleDayWellMixed(roost_series[[i-1]], roost_parms, SIRS_parms, model="SIRS")
 }
 roost_vec <- replicate(roost_parms[1], vector("numeric", length=length(roost_series)))
 
@@ -299,7 +303,8 @@ recv <- ggplot(data=roost_vecR[1:250,],aes(t)) +
 
 ```{r Visualization}
 library(gridExtra)
-p <- grid.arrange(tot, prop,susc, inft, recv,
+
+grid.arrange(tot, prop,susc, inft, recv,
                   top = "Well Mixed System")
 
 ```
