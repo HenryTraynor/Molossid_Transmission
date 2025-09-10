@@ -66,7 +66,7 @@ roost_series_series <- list()
 
 num_realizations <- 10
 num_days <- 150
-roost_index <- 2
+roost_index <- 4
 
 for(i in 1:num_realizations) {
   roost_series <- list()
