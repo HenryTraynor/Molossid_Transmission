@@ -12,12 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r Playground}
 # script for messing with code and developing new functions/figures
 
-SIRS_parms  <- c(beta = 0.009, #transmission rate
+SIRS_parms  <- c(beta = 0.01, #transmission rate
                  gamma = 0.07, #recovery rate (14 day inf)
                  mu = 0.0055) # waning immunity (180 day immunity)
 
-roost_parms <- c(num_roosts = 50,  # number of roosts
-                 num_clusters = 10, # number of clusters
+roost_parms <- c(num_roosts = 10,  # number of roosts
+                 num_clusters = 2, # number of clusters
                  sd = 0.05)           # standard distance from cluster center
 
 roost_map <- roostMap(roost_parms)
@@ -72,7 +72,7 @@ for(i in 2:1000) {
 }
 svec <- c()
 for(i in 1:length(SIRS_list)) {
-  svec[i] <- SIRS_list[[i]]$S
+  svec[i] <- SIRS_list[[i]]$R
 }
 svec
 
@@ -99,9 +99,9 @@ for(i in 2:1000) {
                               phi_max=0.25)
 }
 
-svec <- c()
+svec <- list()
 for(i in 1:length(SIRS_list)) {
-  svec[i] <- sum(SIRS_list[[i]]$S)
+  svec[[i]] <-  SIRS_list[[i]][1,1:4]
 }
 svec
 ```
