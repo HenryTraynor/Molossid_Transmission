@@ -20,6 +20,7 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   
   for(i in 1:num_roosts) {
     phi <- phi_max*(1-scores[i])
+    phi <- 0
     #Number leaving each compartment
     N_e <- rbinom(1, roosts$N[i], phi)
     emigrant_bats$N[i] <- N_e
