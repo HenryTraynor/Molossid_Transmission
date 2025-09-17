@@ -1,8 +1,10 @@
 library(truncnorm)
 roostMap <- function(roost_parms) {
-  num_roosts <- roost_parms[1]
-  num_clusters <- roost_parms[2]
-  sd <- roost_parms[3]
+  num_roosts <- roost_parms["num_roosts"]
+  num_clusters <- roost_parms["num_clusters"]
+  sd <- roost_parms["sd"]
+  avg_N_max <- roost_parms["avg_N_max"]
+  min_N_max <- roost_parms["min_N_max"]
   clusterMap <- function(num_roosts, num_clusters, sd) {
     #Dataframe to hold roost locations
     roosts <- data.frame(x=vector("numeric", num_roosts),
@@ -34,7 +36,7 @@ roostMap <- function(roost_parms) {
                                 roost_parms[2],
                                 roost_parms[3]),
                      as.data.frame(as.character(seq(1,roost_parms[1]))),
-                     as.data.frame(sample.int(50, size=roost_parms[1], replace=TRUE)+20)
+                     as.data.frame(sample.int(avg_N_max, size=roost_parms[1], replace=TRUE)+min_N_max)
                      
   )
   colnames(roost_map)[4:5] <- c("lbl", "N_max")
