@@ -33,7 +33,7 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
         if(emigrant_bats[i,samp[j]] > roosts[i,samp[j]]) {
           browser()
         }
-      }
+      } 
     }
     emigrant_bats$N[i] <- sum(emigrant_bats[i,1:3])
   }
