@@ -70,8 +70,8 @@ for(i in 1:roost_parms[1]) {
 
 ```{r Compute and Store Realizations}
 series_list <- list()
-num_days <- 100
-max_clusters <- 5
+num_days <- 50
+max_clusters <- 3
 for(i in 1:max_clusters) {
   temp <- list()
   temp[[1]] <- roosts
@@ -112,4 +112,84 @@ p <- ggplot(data=df_peak,
 g <- ggplot(data=df_peak,
             aes(x=num_clusters, y=peak_index)) + geom_line()
 grid.arrange(p,g)
+```
+
+```{r Now with average/sd values}
+num_realizations=10 # number of realizations per number of clusters
+num_days <- 50 # length of each time series (days)
+max_clusters <- 10 #max number of clusters
+df_peak <- data.frame(num_clusters = integer(),
+                      peak_index = integer(),
+                      peak_prop = numeric())
+for(i in 1:num_realizations) {
+  series_list <- list()
+  for(p in 1:max_clusters) {
+    temp <- list()
+    temp[[1]] <- roosts
+    for(q in 2:num_days) {
+      roost_parms["num_clusters"] <- p
+      temp[[q]] <- singleDay(temp[[q-1]],
+                            roost_dist,
+                            roost_parms,
+                            SIR_parms,
+                            "SIR",
+                            scores,
+                            phi_max=0.25)
+    }
+    series_list[[p]] <- temp
+  }
+  
+  
+  for(r in 1:length(series_list)) {
+    temp <- c()
+    for(k in 1:length(series_list[[r]])) {
+      temp[k] <- sum(series_list[[r]][[k]]$I)/sum(series_list[[r]][[k]]$N)
+    }
+    bindvec <- c(num_clusters = r,
+                 peak_index = which.max(temp),
+                 peak_prop = temp[which.max(temp)])
+    
+    df_peak <- rbind(df_peak, bindvec)
+  }
+}
+colnames(df_peak) <- c("num_clusters", "peak_index", "peak_prop")
+
+# now we calculate average peak index and peak proportion by number of clusters. store with standard deviation
+
+library(dplyr) 
+df_summary <- df_peak %>%
+  group_by(num_clusters) %>%
+  summarise(
+    mean_peak_index = mean(peak_index, na.rm = TRUE),
+    sd_peak_index   = sd(peak_index, na.rm = TRUE),
+    mean_peak_prop  = mean(peak_prop, na.rm = TRUE),
+    sd_peak_prop    = sd(peak_prop, na.rm = TRUE)
+  )
+
+```
+
+```{r Summary Plot}
+library(gridExtra)
+prop_summary_plot <- ggplot(df_summary, aes(x=num_clusters, y=mean_peak_prop)) +
+  geom_point(size=3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_prop - sd_peak_prop,
+                    ymax = mean_peak_prop + sd_peak_prop),
+                width = 0.2) +
+  labs(x = "Number of clusters",
+       y = "Average peak proportion ± 1 SD") +
+  theme_minimal() 
+
+index_summary_plot <- ggplot(df_summary, aes(x=num_clusters, y=mean_peak_index)) +
+  geom_point(size=3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_index - sd_peak_index,
+                    ymax = mean_peak_index + sd_peak_index),
+                width = 0.2) +
+  labs(x = "Number of clusters",
+       y = "Average peak index ± 1 SD") +
+  theme_minimal()
+
+grid.arrange(prop_summary_plot,
+             index_summary_plot)
 ```
