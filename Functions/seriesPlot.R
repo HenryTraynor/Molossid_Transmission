@@ -23,7 +23,7 @@ seriesPlot <- function(roost_series, var) {
                  values_to = "var")
   
   p -> ggplot(df_long, aes(x=t, y=value,color=Roost)) +
-    geom_line())
+    geom_line()
   
   return(p)
 }
