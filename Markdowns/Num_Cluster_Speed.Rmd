@@ -21,8 +21,8 @@ for(file in files_functions) {
 SIR_parms  <- c(beta = 0.1, #transmission rate
                 gamma = 0.03) # recovery rate
 
-roost_parms <- c(num_roosts = 20,  # number of roosts
-                 num_clusters = 3, # number of clusters
+roost_parms <- c(num_roosts = 25,  # number of roosts
+                 num_clusters = 20, # number of clusters
                  sd = 0.05, #avg distance from roost cluster
                  avg_N_max = 70, # roost size upper bound
                  min_N_max = 10) #minimum roost size
@@ -52,19 +52,19 @@ roosts$S <- roosts$N
 roosts$S[1] <- roosts$S[1]-1
 roosts$I <- roosts$N-roosts$S
 
-#Total distances between any 2 roosts
-total_dist <- 0
-for(i in 1:roost_parms[1]) {
-  for(j in 1:i) {
-    total_dist <- total_dist + as.numeric(roost_dist[i,j])
+scores <- function(num_roosts, roost_dist) {
+  total_dist <- 0
+  for(i in 1:num_roosts) {
+    for(j in 1:i) {
+      total_dist <- total_dist + as.numeric(roost_dist[i,j])
+    }
   }
-}
-
-#Score, a measure of isolation. greater score ==> greater isolation
-scores <- vector("numeric", length=roost_parms[1])
-for(i in 1:roost_parms[1]) {
-  tot <- sum(roost_dist[i,])
-  scores[i] <- tot/total_dist
+  vec <- vector("numeric", length=roost_parms[1])
+  for(i in 1:num_roosts) {
+    tot <- sum(roost_dist[i,])
+    vec[i] <- tot/total_dist
+  }
+  return(vec)
 }
 ```
 
@@ -72,6 +72,21 @@ for(i in 1:roost_parms[1]) {
 series_list <- list()
 num_days <- 50
 max_clusters <- 3
+
+#Total distances between any 2 roosts
+total_dist <- 0
+for(i in 1:roost_parms[1]) {
+  for(j in 1:i) {
+    total_dist <- total_dist + as.numeric(roost_dist[i,j])
+  }
+}
+#Score, a measure of isolation. greater score ==> greater isolation
+scores <- vector("numeric", length=roost_parms[1])
+for(i in 1:roost_parms[1]) {
+  tot <- sum(roost_dist[i,])
+  scores[i] <- tot/total_dist
+}
+
 for(i in 1:max_clusters) {
   temp <- list()
   temp[[1]] <- roosts
@@ -117,17 +132,41 @@ grid.arrange(p,g)
 ```{r Now with average/sd values}
 num_realizations=10 # number of realizations per number of clusters
 num_days <- 50 # length of each time series (days)
-max_clusters <- 10 #max number of clusters
+max_clusters <- 20 #max number of clusters
+
+# df to store data
 df_peak <- data.frame(num_clusters = integer(),
                       peak_index = integer(),
                       peak_prop = numeric())
+
 for(i in 1:num_realizations) {
+  #empty list
   series_list <- list()
   for(p in 1:max_clusters) {
-    temp <- list()
-    temp[[1]] <- roosts
-    for(q in 2:num_days) {
-      roost_parms["num_clusters"] <- p
+    temp <- list() # temporary storage vector
+    temp[[1]] <- roosts # populate initial conditions
+    
+    roost_parms["num_clusters"] <- p # update num_clusters
+    roost_map <- roostMap(roost_parms) # update roost map
+    roost_dist <- distMatrix(roost_parms["num_roosts"], roost_map) # update dist matrix
+    
+    
+    #Total distances between any 2 roosts
+    total_dist <- 0
+    for(k in 1:roost_parms[1]) {
+      for(j in 1:k) {
+        total_dist <- total_dist + as.numeric(roost_dist[k,j])
+      }
+    }
+    #Score, a measure of isolation. greater score ==> greater isolation
+    scores <- vector("numeric", length=roost_parms[1])
+    for(k in 1:roost_parms[1]) {
+      tot <- sum(roost_dist[k,])
+      scores[k] <- tot/total_dist
+    }
+    
+    for(q in 2:num_days) { 
+      # populate remaining iterations in temp
       temp[[q]] <- singleDay(temp[[q-1]],
                             roost_dist,
                             roost_parms,
@@ -136,15 +175,17 @@ for(i in 1:num_realizations) {
                             scores,
                             phi_max=0.25)
     }
+    # add to list
     series_list[[p]] <- temp
   }
-  
   
   for(r in 1:length(series_list)) {
     temp <- c()
     for(k in 1:length(series_list[[r]])) {
+      # compute proportion of infected individuals
       temp[k] <- sum(series_list[[r]][[k]]$I)/sum(series_list[[r]][[k]]$N)
     }
+    # vector to be added to df_peak
     bindvec <- c(num_clusters = r,
                  peak_index = which.max(temp),
                  peak_prop = temp[which.max(temp)])
