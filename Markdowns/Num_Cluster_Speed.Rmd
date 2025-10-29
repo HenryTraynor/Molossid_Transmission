@@ -52,7 +52,7 @@ roosts$S <- roosts$N
 roosts$S[1] <- roosts$S[1]-1
 roosts$I <- roosts$N-roosts$S
 
-scores <- function(num_roosts, roost_dist) {
+calc_scores <- function(num_roosts, roost_dist) {
   total_dist <- 0
   for(i in 1:num_roosts) {
     for(j in 1:i) {
@@ -234,3 +234,114 @@ index_summary_plot <- ggplot(df_summary, aes(x=num_clusters, y=mean_peak_index))
 grid.arrange(prop_summary_plot,
              index_summary_plot)
 ```
+
+```{r SD Variation Setup}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+
+num_realizations <- 10
+num_days <- 50
+sd_values <- seq(0.01, 0.1, by = 0.01)  # sequence of cluster SDs to explore
+
+# Data frame to store results
+df_peak <- data.frame(
+  sd = numeric(),
+  peak_index = integer(),
+  peak_prop = numeric()
+)
+
+for(real in 1:num_realizations) {
+  for(sd_val in sd_values) {
+    
+    # Update roost parameters
+    local_roost <- roost_parms
+    local_roost["sd"] <- sd_val
+    
+    # Generate roost map and distances
+    roost_map <- roostMap(local_roost)
+    roost_dist <- distMatrix(local_roost["num_roosts"], roost_map)
+    
+    # Compute scores
+    total_dist <- sum(roost_dist[upper.tri(roost_dist, diag = TRUE)])
+    scores <- numeric(local_roost["num_roosts"])
+    for(i in 1:local_roost["num_roosts"]) {
+      scores[i] <- sum(roost_dist[i, ]) / total_dist
+    }
+    
+    # Initialize roosts
+    roosts <- data.frame(
+      S = round(roost_map$N_max / 1.5),
+      I = 0,
+      R = 0,
+      N = round(roost_map$N_max / 1.5),
+      N_max = roost_map$N_max
+    )
+    roosts$S[1] <- roosts$S[1] - 1
+    roosts$I[1] <- 1
+    
+    # Run simulation
+    temp <- list()
+    temp[[1]] <- roosts
+    for(day in 2:num_days) {
+      temp[[day]] <- singleDay(
+        roosts = temp[[day - 1]],
+        roost_dist = roost_dist,
+        roost_parms = local_roost,
+        inf_parms = SIR_parms,
+        model = "SIR",
+        scores = scores,
+        phi_max = 0.25
+      )
+    }
+    
+    # Compute peak
+    prop_inf <- sapply(temp, function(x) sum(x$I) / sum(x$N))
+    peak_index <- which.max(prop_inf)
+    peak_prop <- max(prop_inf)
+    
+    df_peak <- rbind(df_peak, data.frame(sd = sd_val,
+                                         peak_index = peak_index,
+                                         peak_prop = peak_prop))
+  }
+}
+```
+
+```{r SD Summary}
+# Summarize mean ± SD
+df_summary <- df_peak %>%
+  group_by(sd) %>%
+  summarise(
+    mean_peak_index = mean(peak_index, na.rm = TRUE),
+    sd_peak_index = sd(peak_index, na.rm = TRUE),
+    mean_peak_prop = mean(peak_prop, na.rm = TRUE),
+    sd_peak_prop = sd(peak_prop, na.rm = TRUE)
+  )
+```
+
+```{r SD Summary Plot}
+prop_summary_plot <- ggplot(df_summary, aes(x = sd, y = mean_peak_prop)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_prop - sd_peak_prop,
+                    ymax = mean_peak_prop + sd_peak_prop),
+                width = 0.002) +
+  labs(x = "Roost cluster SD",
+       y = "Average peak proportion ± 1 SD") +
+  theme_minimal()
+
+index_summary_plot <- ggplot(df_summary, aes(x = sd, y = mean_peak_index)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_index - sd_peak_index,
+                    ymax = mean_peak_index + sd_peak_index),
+                width = 0.002) +
+  labs(x = "Roost cluster SD",
+       y = "Average peak index ± 1 SD") +
+  theme_minimal()
+
+grid.arrange(prop_summary_plot, index_summary_plot)
+```
+
+
+
