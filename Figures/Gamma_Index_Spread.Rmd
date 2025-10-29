@@ -1,0 +1,176 @@
+---
+title: "Epidemic Speed"
+author: "Henry Traynor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Sourcing}
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for(file in files_functions) {
+  source(file)
+}
+```
+
+```{r Parameters}
+#Define SIR Model Parameters
+SIR_parms  <- c(beta = 0.1, #transmission rate
+                gamma = 0.03) # recovery rate
+
+roost_parms <- c(num_roosts = 25,  # number of roosts
+                 num_clusters = 5, # number of clusters
+                 sd = 0.05, #avg distance from roost cluster
+                 avg_N_max = 70, # roost size upper bound
+                 min_N_max = 10) #minimum roost size
+```
+
+```{r Roost Creation}
+roost_map <- roostMap(roost_parms)
+roost_dist <- distMatrix(roost_parms[1], roost_map)
+
+library(ggplot2)
+ggplot(roost_map, aes(x,y, color=bin, label = lbl, size=N_max)) + geom_text() + xlim(0,1) + ylim(0,1)
+```
+
+
+```{r Roosts}
+roosts <- data.frame(
+  S = vector("numeric", length=roost_parms[1]),
+  I = vector("numeric", length=roost_parms[1]),
+  R = vector("numeric", length=roost_parms[1]),
+  N = vector("numeric", length=roost_parms[1]),
+  N_max = roost_map$N_max
+)
+
+#Populate Roosts
+roosts$N <- round(roosts$N_max/1.5)
+roosts$S <- roosts$N
+roosts$S[1] <- roosts$S[1]-1
+roosts$I <- roosts$N-roosts$S
+
+scores <- function(num_roosts, roost_dist) {
+  total_dist <- 0
+  for(i in 1:num_roosts) {
+    for(j in 1:i) {
+      total_dist <- total_dist + as.numeric(roost_dist[i,j])
+    }
+  }
+  vec <- vector("numeric", length=roost_parms[1])
+  for(i in 1:num_roosts) {
+    tot <- sum(roost_dist[i,])
+    vec[i] <- tot/total_dist
+  }
+  return(vec)
+}
+```
+
+
+```{r Gamma}
+num_realizations <- 10
+gamma_values <- seq(0.01, 0.1, by = 0.01)  # range of gamma values
+num_days <- 50  # length of each time series
+
+# Data frame to store results
+df_peak <- data.frame(
+  gamma = numeric(),
+  peak_index = integer(),
+  peak_prop = numeric()
+)
+
+plan(multisession, workers = parallel::detectCores() - 1)
+
+# Loop over realizations in parallel
+for (r in 1:num_realizations) {
+  df_list <- future_lapply(gamma_values, function(g) {
+    local_SIR <- SIR_parms
+    local_SIR["gamma"] <- g
+    local_SIR["beta"] <- SIR_parms["beta"]  # keep beta fixed
+
+    local_roost <- roost_parms
+    roost_map <- roostMap(local_roost)
+    roost_dist <- distMatrix(local_roost["num_roosts"], roost_map)
+    
+    # Compute scores
+    total_dist <- sum(roost_dist[upper.tri(roost_dist, diag = TRUE)])
+    score_vec <- numeric(local_roost["num_roosts"])
+    for(i in 1:local_roost["num_roosts"]) {
+      score_vec[i] <- sum(roost_dist[i, ]) / total_dist
+    }
+
+    # Initialize roosts
+    roosts <- data.frame(
+      S = round(roost_map$N_max / 1.5),
+      I = 0,
+      R = 0,
+      N = round(roost_map$N_max / 1.5),
+      N_max = roost_map$N_max
+    )
+    roosts$S[1] <- roosts$S[1] - 1
+    roosts$I[1] <- 1
+
+    # Simulate over days
+    temp <- list()
+    temp[[1]] <- roosts
+    for(q in 2:num_days) {
+      temp[[q]] <- singleDay(
+        roosts = temp[[q-1]],
+        roost_dist = roost_dist,
+        roost_parms = local_roost,
+        inf_parms = local_SIR,
+        model = "SIR",
+        scores = score_vec,
+        phi_max = 0.25
+      )
+    }
+
+    prop_inf <- sapply(temp, function(x) sum(x$I) / sum(x$N))
+
+    data.frame(
+      gamma = g,
+      peak_index = which.max(prop_inf),
+      peak_prop = max(prop_inf)
+    )
+  }, future.seed = TRUE)
+
+  # Combine results from this realization
+  df_peak <- rbind(df_peak, do.call(rbind, df_list))
+}
+
+# Summarize mean and SD by gamma
+df_summary <- df_peak %>%
+  group_by(gamma) %>%
+  summarise(
+    mean_peak_index = mean(peak_index, na.rm = TRUE),
+    sd_peak_index = sd(peak_index, na.rm = TRUE),
+    mean_peak_prop = mean(peak_prop, na.rm = TRUE),
+    sd_peak_prop = sd(peak_prop, na.rm = TRUE)
+  )
+
+# Plots
+prop_plot <- ggplot(df_summary, aes(x = gamma, y = mean_peak_prop)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_prop - sd_peak_prop,
+                    ymax = mean_peak_prop + sd_peak_prop),
+                width = 0.002) +
+  labs(x = "Gamma (recovery rate)",
+       y = "Average peak proportion ± 1 SD") +
+  theme_minimal()
+
+index_plot <- ggplot(df_summary, aes(x = gamma, y = mean_peak_index)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_peak_index - sd_peak_index,
+                    ymax = mean_peak_index + sd_peak_index),
+                width = 0.002) +
+  labs(x = "Gamma (recovery rate)",
+       y = "Average peak index ± 1 SD") +
+  theme_minimal()
+
+grid.arrange(prop_plot, index_plot)
+
+```

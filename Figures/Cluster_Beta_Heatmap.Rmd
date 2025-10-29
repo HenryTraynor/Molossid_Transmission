@@ -1,0 +1,146 @@
+---
+title: "Joint Effects of Cluster Structure and Transmission Rate on Epidemic Dynamics"
+author: "Henry T."
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r Setup, message=FALSE, warning=FALSE}
+# --- Load dependencies and model functions ---
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for (file in files_functions) source(file)
+
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(viridis)
+library(future.apply)
+
+# --- Parallel setup ---
+n_cores <- parallel::detectCores() - 1
+plan(multisession, workers = n_cores)
+cat("Using", n_cores, "cores for parallel simulations.\n")
+```
+
+```{r}
+# Base parameters
+SIR_parms  <- c(beta = 0.1, gamma = 0.03)
+
+roost_parms <- c(num_roosts = 30,
+                 num_clusters = 10,
+                 sd = 0.05,
+                 avg_N_max = 70,
+                 min_N_max = 10)
+
+num_days <- 50
+num_realizations <- 10
+
+beta_values <- seq(0.05, 0.25, by = 0.05)
+cluster_values <- seq(5, 25, by = 5)
+```
+
+```{r}
+# --- Core simulation for one (beta, clusters) combination ---
+
+simulate_combo <- function(b, p, realization_id) {
+  local_SIR <- SIR_parms
+  local_SIR["beta"] <- b
+  
+  local_roost <- roost_parms
+  local_roost["num_clusters"] <- p
+  
+  # Create map and distance matrix
+  roost_map <- roostMap(local_roost)
+  roost_dist <- distMatrix(local_roost["num_roosts"], roost_map)
+  
+  # total distance among all roosts
+  total_dist <- sum(roost_dist[upper.tri(roost_dist, diag = TRUE)])
+
+  # compute isolation score for each roost
+  score_vec <- numeric(roost_parms["num_roosts"])
+  for(i in 1:roost_parms["num_roosts"]) {
+    tot <- sum(roost_dist[i, ])
+    score_vec[i] <- tot / total_dist
+  }
+  
+  # Initialize roosts
+  roosts <- data.frame(
+    S = numeric(local_roost["num_roosts"]),
+    I = numeric(local_roost["num_roosts"]),
+    R = numeric(local_roost["num_roosts"]),
+    N = numeric(local_roost["num_roosts"]),
+    N_max = roost_map$N_max
+  )
+  
+  roosts$N <- round(roosts$N_max / 1.5)
+  roosts$S <- roosts$N
+  roosts$S[1] <- roosts$S[1] - 1
+  roosts$I <- roosts$N - roosts$S
+  
+  # Run daily dynamics
+  temp <- list()
+  temp[[1]] <- roosts
+  for (q in 2:num_days) {
+    temp[[q]] <- singleDay(temp[[q-1]],
+                           roost_dist,
+                           local_roost,
+                           local_SIR,
+                           "SIR",
+                           scores = score_vec,
+                           phi_max = 0.25)
+  }
+  
+  # Extract infection proportions
+  prop_inf <- sapply(temp, function(x) sum(x$I) / sum(x$N))
+  data.frame(beta = b,
+             num_clusters = p,
+             realization = realization_id,
+             peak_index = which.max(prop_inf),
+             peak_prop = max(prop_inf))
+}
+```
+
+```{r}
+# --- Expand all parameter combinations ---
+param_grid <- expand.grid(beta = beta_values,
+                          num_clusters = cluster_values,
+                          realization = 1:num_realizations)
+
+# --- Run in parallel ---
+cat("Starting parallel simulation grid...\n")
+df_results <- future_apply(param_grid, 1, function(row) {
+  simulate_combo(b = as.numeric(row["beta"]),
+                 p = as.numeric(row["num_clusters"]),
+                 realization_id = as.integer(row["realization"]))
+}, future.seed = TRUE) %>%
+  do.call(rbind, .)
+
+cat("All simulations completed.\n")
+```
+
+```{r}
+df_summary <- df_results %>%
+  group_by(beta, num_clusters) %>%
+  summarise(mean_peak_index = mean(peak_index, na.rm = TRUE),
+            mean_peak_prop  = mean(peak_prop, na.rm = TRUE),
+            .groups = "drop")
+```
+
+```{r}
+# --- Heatmaps of mean peak infection outcomes ---
+prop_heatmap <- ggplot(df_summary, aes(x = num_clusters, y = beta, fill = mean_peak_prop)) +
+  geom_tile() +
+  scale_fill_viridis(name = "Peak Proportion", option = "C") +
+  labs(x = "Number of clusters", y = "Transmission rate (β)",
+       title = "Mean Peak Infection Proportion") +
+  theme_minimal(base_size = 13)
+
+index_heatmap <- ggplot(df_summary, aes(x = num_clusters, y = beta, fill = mean_peak_index)) +
+  geom_tile() +
+  scale_fill_viridis(name = "Peak Index (days)", option = "C", direction = -1) +
+  labs(x = "Number of clusters", y = "Transmission rate (β)",
+       title = "Timing of Peak Infection") +
+  theme_minimal(base_size = 13)
+
+grid.arrange(prop_heatmap, index_heatmap, ncol = 1)
+```
