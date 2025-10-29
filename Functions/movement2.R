@@ -2,6 +2,15 @@
 
 movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   sample.vec <- function(x, ...) x[sample(length(x), ...)]
+  # Safe random draw wrapper
+  safe_rbinom <- function(n, size, prob) {
+    size[is.na(size) | size < 0] <- 0
+    prob[is.na(prob) | prob < 0] <- 0
+    prob[prob > 1] <- 1
+    if (all(size == 0)) return(rep(0, n))
+    rbinom(n, size, prob)
+  }
+  
   
   #matrix storing num bats in each compartment that leave roost i
   emigrant_bats <- data.frame(
@@ -21,7 +30,7 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   for(i in 1:num_roosts) {
     phi <-  phi_max*(1-scores[i])
     #Number leaving each compartment
-    N_e <- rbinom(1, roosts$N[i], phi)
+    N_e <- safe_rbinom(1, roosts$N[i], phi)
     emigrant_bats$N[i] <- N_e
     if(N_e > 0) {
       x <- c(rep(1, roosts$S[i]),
@@ -96,48 +105,3 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
 
 #We want to sometimes remove roosts from the system
 #Determine where these bats go
-
-deleteRoost <- function(roosts, roost_index) {
-  num_roosts <- roost_parms[1]
-  #Bats leaving 'roost_index'
-  emigrant_bats <- roosts[roost_index,1:4]
-  #Bat destinations
-  immigrant_bats <- data.frame(
-    S = vector("numeric", length=num_roosts),
-    I = vector("numeric", length=num_roosts),
-    R = vector("numeric", length=num_roosts),
-    N = vector("numeric", length=num_roosts)
-  )
-  
-  #Decay function for j being destination
-  #Exp base may be an interesting way to alter dispersal distance
-  pi <- (1/50)^roost_dist[roost_index,]*(roosts$N/roosts$N_max+0.05)
-  for(k in 1:length(pi)) {
-    if (roosts$N[k]>=roosts$N_max[k] || k==roost_index) {
-      pi[k]=0
-    }
-  }
-  for(k in 1:3) {
-    if(emigrant_bats[k] != 0) {
-      #gives vector of destinations
-      destinations <- sample.int(num_roosts,
-                                 size=emigrant_bats[k],
-                                 replace=TRUE,
-                                 prob=pi)
-      for(j in 1:length(destinations)) {
-        immigrant_bats[destinations[j],k] <- immigrant_bats[destinations[j],k] + 1
-      }
-    }
-  }
-  
-  for(i in 1:num_roosts) {
-    immigrant_bats$N[i] <- sum(immigrant_bats[i,1:3])
-  }
-  
-  #Subtract emigrants
-  roosts[roost_index,] <- c(0,0,0,0,0)
-  #Add immigrants
-  roosts[,1:4] <- roosts[,1:4] + immigrant_bats
-  
-  return(roosts)
-}
