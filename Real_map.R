@@ -17,6 +17,7 @@ names(site_list) <- paste0("site_", make.names(names(site_list)))
 # Assign each split dataframe to its own variable
 list2env(site_list, envir = .GlobalEnv)
 
+source("Functions/roost_map.R")
 list_pairwise_distances <- lapply(site_list, function(d) {
   return(distMatrix(length(d$rownum),d))
 })
