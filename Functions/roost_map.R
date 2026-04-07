@@ -1,4 +1,64 @@
 library(truncnorm)
+
+roostMapProp <- function(roost_parms) {
+  trad_mean <- 20
+  modern_mean <- 100
+  
+  num_roosts <- roost_parms["num_roosts"]
+  num_clusters <- roost_parms["num_clusters"]
+  sd <- roost_parms["sd"]
+  prop_modern <- roost_parms["prop_modern"]
+  clusterMap <- function(num_roosts, num_clusters, sd) {
+    #Dataframe to hold roost locations
+    roosts <- data.frame(x=vector("numeric", num_roosts),
+                         y=vector("numeric", num_roosts))
+    
+    #Randomly sort roosts
+    roosts <- cbind(roosts,sample.int(n=num_clusters, size=num_roosts, replace=TRUE))
+    colnames(roosts) <- c("x","y","bin")
+    
+    #Assign locations to first 5 roosts and designate them as cluster centers
+    for(i in 1:num_clusters) {
+      roosts$x[i] <- runif(1,0,1)
+      roosts$y[i] <- runif(1,0,1)
+      roosts$bin[i] <- i
+    }
+    
+    #Iterate through and rtruncnorm roosts arounds clusters
+    for(i in (num_clusters+1):num_roosts) {
+      bin_num = roosts$bin[i]
+      cluster_center = roosts[bin_num,1:2]
+      roosts$x[i] <- rtruncnorm(1, a=0, b=1, mean=cluster_center$x[1], sd)
+      roosts$y[i] <- rtruncnorm(1, a=0, b=1, mean=cluster_center$y[1], sd)
+    }
+    roosts$bin <- as.character(roosts$bin)
+    return(roosts)
+  }
+  
+  roost_map <- cbind(clusterMap(roost_parms[1],
+                                roost_parms[2],
+                                roost_parms[3])
+                     
+                          
+                     
+                     
+                     #,
+                     #as.data.frame(as.character(seq(1,roost_parms[1]))),
+                     #as.data.frame(sample.int(avg_N_max, size=roost_parms[1], replace=TRUE)+min_N_max)
+                     
+  )
+  
+  roost_map$isModern <- rbinom(as.numeric(num_roosts), 1, as.numeric(prop_modern)) == 1
+  roost_map$N_max <- rpois(num_roosts, trad_mean)
+  
+  for(i in 1:num_roosts) {
+    if(roost_map$isModern[i]) {
+      roost_map$N_max[i] <- rpois(1, modern_mean)
+    }
+  }
+  return(roost_map)
+}
+
 roostMap <- function(roost_parms) {
   num_roosts <- roost_parms["num_roosts"]
   num_clusters <- roost_parms["num_clusters"]
