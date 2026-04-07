@@ -14,6 +14,6 @@ singleDay <- function(roosts, roost_dist, roost_parms, inf_parms, model, scores,
   )
   
   # Daytime infection process
-  new_roosts <- daytime(new_roosts, roost_parms, inf_parms, model = "SIR")
+  new_roosts <- daytime(new_roosts, roost_parms, inf_parms, model)
   return(new_roosts)
 }

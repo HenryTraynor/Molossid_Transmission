@@ -28,22 +28,29 @@ SIRSleap <- function(y, SIRS_parms) {
   N <- y$N
   beta <- SIRS_parms["beta"]
   gamma <- SIRS_parms["gamma"]
-  mu <- SIRS_parms["mu"]
+  omega <- SIRS_parms["omega"]  # loss of immunity
   
-  if(N<=0) {
-    num <- c(0,0,0)
-  }
+  if (N <= 0) {
+    prob <- c(0,
+              0,
+              0)
+  } 
   else {
-    # prob <- c(infection, recovering, immunity wanes)
-    prob <- c(1-exp(-1*beta*S*I/N),
-              1-exp(-1*gamma),
-              1-exp(-1*mu))
-    num <- c(rbinom(1,S,prob[1]), # infections
-             rbinom(1,I,prob[2]), # recoveries
-             rbinom(1,R,prob[3])) # losses of immunity
+    prob <- c(1 - exp(-1*beta*S*I/N),  # infection
+              1 - exp(-1*gamma),             # recovery
+              1 - exp(-1*omega))             # loss of immunity
   }
   
-  y[1:3] <- y[1:3] + c(num[3]-num[1], num[1]-num[2], num[2]-num[3])
+  num <- c(rbinom(1, S, prob[1]),  # S -> I
+           rbinom(1, I, prob[2]),  # I -> R
+           rbinom(1, R, prob[3]))  # R -> S
+  
+  y[1:3] <- y[1:3] + c(
+    -num[1] + num[3],   # S gains from R, loses to I
+    num[1] - num[2],   # I gains from S, loses to R
+    num[2] - num[3]    # R gains from I, loses to S
+  )
+  
   return(y)
 }
 

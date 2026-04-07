@@ -21,9 +21,9 @@ for(file in files_functions) {
 SIR_parms  <- c(beta = 0.1, #transmission rate
                 gamma = 0.03) # recovery rate
 
-roost_parms <- c(num_roosts = 25,  # number of roosts
-                 num_clusters = 20, # number of clusters
-                 sd = 0.05, #avg distance from roost cluster
+roost_parms <- c(num_roosts = 50,  # number of roosts
+                 num_clusters = 6, # number of clusters
+                 sd = 0.5, #avg distance from roost cluster
                  avg_N_max = 70, # roost size upper bound
                  min_N_max = 10) #minimum roost size
 ```
