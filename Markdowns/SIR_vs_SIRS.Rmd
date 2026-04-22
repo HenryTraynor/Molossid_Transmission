@@ -9,22 +9,207 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Intro
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+We want to compare SIR vs SIRS dynamics across gradients of urbanization and correlated spatial statistics. We will generate a gradient of modern structures in a landscape crossed with a gradient of a given spatial statistic. Running simulated epidemics on this landscape with SIR and SIRS dynamics reveals the significance of metapopulation dynamics in viral transmission.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+```{r Sourcing}
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for(file in files_functions) {
+  source(file)
+}
 ```
 
-## Including Plots
+```{r Landscapes}
+num_roosts <- 100
 
-You can also embed plots, for example:
+#sequence giving proportion of modern buildings gradient
+modern_range <- c(0,1)
+modern_resolution <- .1
+prop_modern_seq <- seq(modern_range[1], modern_range[2], by=modern_resolution)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#seq for number of clusters
+cluster_range <- c(1,round(num_roosts/4)) # more clusters means lower Moran's I
+cluster_resolution <- 2
+cluster_seq <- seq(cluster_range[1], cluster_range[2], by=cluster_resolution)
+
+#seq for x,y sd of clusters
+sd_range <- c(0.03, 0.2) #higher sd correlates to lower Moran's I
+sd_seq <- seq(sd_range[1], sd_range[2], length=length(cluster_seq))
+
+spatial_var <- data.frame(num_clusters = cluster_seq,
+                          sd = sd_seq)
+
+num_maps <- length(prop_modern_seq)*length(cluster_seq)
+total_num_roosts <- num_maps*num_roosts
+
+roost_crossed_gradient <- data.frame(map_ID = rep(1:num_maps, each=num_roosts),
+                                     x = vector("numeric", length=total_num_roosts),
+                                     y = vector("numeric", length=total_num_roosts),
+                                     isModern = vector("numeric", length=total_num_roosts),
+                                     N_max = vector("numeric", length=total_num_roosts))
+
+spatial_var_combos <- data.frame(prop_modern = rep(prop_modern_seq, length(cluster_seq)))
+spatial_var_combos$num_clusters <- rep(cluster_seq, each=length(prop_modern_seq))
+spatial_var_combos$sd <- rep(sd_seq, each=length(prop_modern_seq))
+spatial_var_combos$Clark_Evans_R <- vector("numeric", length(spatial_var_combos$prop_modern))
+
+for(i in 1:length(spatial_var_combos$prop_modern)) {
+  roost_parms <- c(num_roosts = num_roosts,  # number of roosts
+                   num_clusters = spatial_var_combos$num_clusters[i], # number of clusters
+                   sd = spatial_var_combos$sd[i],
+                   prop_modern = spatial_var_combos$prop_modern[i])     # standard distance from cluster center
+  map <- roostMapProp(roost_parms)
+  map <- map[, !names(map) %in% c("bin")]
+  firstIndex <- which(roost_crossed_gradient$map_ID == i)[1]
+  roost_crossed_gradient[firstIndex:(firstIndex +nrow(map)-1), -1] <- map
+}
+
+library(spatstat.geom)
+library(spatstat.explore)
+for(i in 1:length(spatial_var_combos$prop_modern)) {
+  map <- roost_crossed_gradient[roost_crossed_gradient$map_ID==i,]
+  pp <- ppp(map$x, map$y)
+  spatial_var_combos$Clark_Evans_R[i] <- clarkevans(pp)["cdf"]
+}
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r Infection Parameters}
+SIR_parms  <- c(beta = 0.1,   # transmission rate
+                gamma = 0.03) # recovery rate
+
+SIRS_parms <- c(beta = 0.1,   # transmission rate
+                gamma = 0.03, # recovery rate
+                omega = 0.01) # loss of immunity
+```
+
+```{r SIR sim}
+sim_list <- list()
+map_intensity <- c()
+
+for(map_num in unique(roost_crossed_gradient$map_ID)) {
+  roost_parms[1] <- num_roosts
+  num_days <- 100
+  
+  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == roost_num,]
+  roost_dist <- distMatrix(num_roosts, roost_map)
+  
+  roosts <- data.frame(
+    S = vector("numeric", length=roost_parms[1]),
+    I = vector("numeric", length=roost_parms[1]),
+    R = vector("numeric", length=roost_parms[1]),
+    N = vector("numeric", length=roost_parms[1]),
+    N_max = roost_map$N_max
+  )
+
+  #Populate Roosts
+  roosts$N <- round(roosts$N_max/1.5)
+  roosts$S <- roosts$N
+  roosts$S[1] <- roosts$S[1]-1
+  roosts$I <- roosts$N-roosts$S
+
+  #Total distances between any 2 roosts
+  total_dist <- 0
+  for(i in 1:roost_parms[1]) {
+    for(j in 1:i) {
+      total_dist <- total_dist + as.numeric(roost_dist[i,j])
+    }
+  }
+
+  #Score, a measure of isolation. greater score ==> greater isolation
+  scores <- vector("numeric", length=roost_parms[1])
+  for(i in 1:roost_parms[1]) {
+    tot <- sum(roost_dist[i,])
+    scores[i] <- tot/total_dist
+  }
+  
+  sim_list[[1]] <- roosts
+  for(i in 2:num_days) {
+    sim_list[[i]] <- singleDay(roosts, 
+                               roost_dist, 
+                               roost_parms, 
+                               SIR_parms, 
+                               model="SIR", 
+                               scores, 
+                               phi_max=0.25)
+  }
+  
+  inf_sums <- c()
+  for(i in 1:length(sim_list)) {
+    inf_sums[i] <- sum(sim_list[[i]]$I)
+  }
+  map_intensity[map_num] <- max(inf_sums)
+}
+```
+
+```{r SIRS sim}
+sim_list <- list()
+map_intensity_SIRS <- c()
+
+for(map_num in unique(roost_crossed_gradient$map_ID)) {
+  roost_parms[1] <- num_roosts
+  num_days <- 100
+  
+  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == roost_num,]
+  roost_dist <- distMatrix(num_roosts, roost_map)
+  
+  roosts <- data.frame(
+    S = vector("numeric", length=roost_parms[1]),
+    I = vector("numeric", length=roost_parms[1]),
+    R = vector("numeric", length=roost_parms[1]),
+    N = vector("numeric", length=roost_parms[1]),
+    N_max = roost_map$N_max
+  )
+
+  #Populate Roosts
+  roosts$N <- round(roosts$N_max/1.5)
+  roosts$S <- roosts$N
+  roosts$S[1] <- roosts$S[1]-1
+  roosts$I <- roosts$N-roosts$S
+
+  #Total distances between any 2 roosts
+  total_dist <- 0
+  for(i in 1:roost_parms[1]) {
+    for(j in 1:i) {
+      total_dist <- total_dist + as.numeric(roost_dist[i,j])
+    }
+  }
+
+  #Score, a measure of isolation. greater score ==> greater isolation
+  scores <- vector("numeric", length=roost_parms[1])
+  for(i in 1:roost_parms[1]) {
+    tot <- sum(roost_dist[i,])
+    scores[i] <- tot/total_dist
+  }
+  
+  sim_list[[1]] <- roosts
+  for(i in 2:num_days) {
+    sim_list[[i]] <- singleDay(roosts, 
+                               roost_dist, 
+                               roost_parms, 
+                               SIRS_parms, 
+                               model="SIRS", 
+                               scores, 
+                               phi_max=0.25)
+  }
+  
+  inf_sums <- c()
+  for(i in 1:length(sim_list)) {
+    inf_sums[i] <- sum(sim_list[[i]]$I)
+  }
+  map_intensity[map_num] <- max(inf_sums)
+  if(map_num == 35) { break }
+}
+```
+
+```{r heatmaps short}
+map_intensity_SIRS <- vector("numeric", length=length(spatial_var_combos$prop_modern))
+for(i in 1:length(map_intensity)) {
+  map_intensity_SIRS[i] <- map_intensity[i]
+}
+spatial_var_combos$SIRS_intensity <- map_intensity_SIRS
+
+library(ggplot2)
+ggplot(spatial_var_combos, aes(prop_modern, Clark_Evans_R, color=SIRS_intensity)) + geom_point()
+```
