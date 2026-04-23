@@ -26,7 +26,7 @@ num_roosts <- 100
 
 #sequence giving proportion of modern buildings gradient
 modern_range <- c(0,1)
-modern_resolution <- .1
+modern_resolution <- .075
 prop_modern_seq <- seq(modern_range[1], modern_range[2], by=modern_resolution)
 
 #seq for number of clusters
@@ -88,6 +88,8 @@ SIRS_parms <- c(beta = 0.1,   # transmission rate
 sim_list <- list()
 map_intensity <- c()
 
+start_time <- Sys.time()
+
 for(map_num in unique(roost_crossed_gradient$map_ID)) {
   roost_parms[1] <- num_roosts
   num_days <- 100
@@ -140,18 +142,24 @@ for(map_num in unique(roost_crossed_gradient$map_ID)) {
     inf_sums[i] <- sum(sim_list[[i]]$I)
   }
   map_intensity[map_num] <- max(inf_sums)
+  
 }
 ```
 
 ```{r SIRS sim}
-sim_list <- list()
+sim_list_SIR <- list()
+map_intensity_SIR <- c()
+
+sim_list_SIRS <- list()
 map_intensity_SIRS <- c()
+
+start_time <- Sys.time()
 
 for(map_num in unique(roost_crossed_gradient$map_ID)) {
   roost_parms[1] <- num_roosts
-  num_days <- 100
+  num_days <- 500
   
-  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == roost_num,]
+  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == map_num,]
   roost_dist <- distMatrix(num_roosts, roost_map)
   
   roosts <- data.frame(
@@ -183,9 +191,17 @@ for(map_num in unique(roost_crossed_gradient$map_ID)) {
     scores[i] <- tot/total_dist
   }
   
-  sim_list[[1]] <- roosts
+  sim_list_SIR[[1]] <- roosts
+  sim_list_SIRS[[1]] <- roosts
   for(i in 2:num_days) {
-    sim_list[[i]] <- singleDay(roosts, 
+    sim_list_SIR[[i]] <- singleDay(sim_list_SIR[[i-1]], 
+                               roost_dist, 
+                               roost_parms, 
+                               SIRS_parms, 
+                               model="SIR", 
+                               scores, 
+                               phi_max=0.25)
+    sim_list_SIRS[[i]] <- singleDay(sim_list_SIRS[[i-1]], 
                                roost_dist, 
                                roost_parms, 
                                SIRS_parms, 
@@ -194,22 +210,85 @@ for(map_num in unique(roost_crossed_gradient$map_ID)) {
                                phi_max=0.25)
   }
   
-  inf_sums <- c()
-  for(i in 1:length(sim_list)) {
-    inf_sums[i] <- sum(sim_list[[i]]$I)
+  inf_sums_SIR <- c()
+  inf_sums_SIRS <- c()
+  for(i in 1:length(sim_list_SIR)) {
+    inf_sums_SIR[i] <- sum(sim_list_SIR[[i]]$I)
+    inf_sums_SIRS[i] <- sum(sim_list_SIRS[[i]]$I)
   }
-  map_intensity[map_num] <- max(inf_sums)
-  if(map_num == 35) { break }
+  map_intensity_SIR[map_num] <- max(inf_sums_SIR)
+  map_intensity_SIRS[map_num] <- max(inf_sums_SIRS)
+  
+  # compute elapsed time
+  elapsed <- Sys.time() - start_time
+  
+  # print progress
+  cat("Iteration:", map_num, " of  ", length(unique(roost_crossed_gradient$map_ID)),
+      "| Elapsed time:", round(elapsed, 2), "\n")
 }
+
+map_pop_size <- c()
+
+for(i in 1:length(map_intensity_SIR)) {
+  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == i,]
+  map_pop_size[i] <- round(sum(roost_map$N_max)/1.5)
+}
+
+spatial_var_combos$SIRS_intensity <- map_intensity_SIRS
+spatial_var_combos$SIR_intensity <- map_intensity_SIR
+
+spatial_var_combos$SIR_prevalence <- spatial_var_combos$SIR_intensity / map_pop_size
+spatial_var_combos$SIRS_prevalence <- spatial_var_combos$SIRS_intensity / map_pop_size
 ```
 
 ```{r heatmaps short}
-map_intensity_SIRS <- vector("numeric", length=length(spatial_var_combos$prop_modern))
-for(i in 1:length(map_intensity)) {
-  map_intensity_SIRS[i] <- map_intensity[i]
-}
-spatial_var_combos$SIRS_intensity <- map_intensity_SIRS
-
 library(ggplot2)
-ggplot(spatial_var_combos, aes(prop_modern, Clark_Evans_R, color=SIRS_intensity)) + geom_point()
+library(akima)
+library(gridExtra)
+
+#remove outliers (no significant epidemic takes hold)
+spatial_var_combos_clean <- subset(spatial_var_combos, SIRS_prevalence >= 0.05)
+
+interp_res_SIR <- with(spatial_var_combos_clean, interp(x = prop_modern, y = Clark_Evans_R, z = SIR_prevalence))
+
+interp_df_SIR <- with(interp_res_SIR, expand.grid(x = x, y = y))
+interp_df_SIR$z <- as.vector(interp_res_SIR$z)
+
+SIR_interp_plot <- ggplot(interp_df_SIR, aes(x, y, fill = z)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  xlab("Proportion modern buildings") +
+  ylab("Clark Evan's R") +
+  labs(fill = "Peak prevalance") + 
+  ggtitle("SIR Dynamics")
+
+interp_res_SIRS <- with(spatial_var_combos_clean, interp(x = prop_modern, y = Clark_Evans_R, z = SIRS_prevalence))
+
+interp_df_SIRS <- with(interp_res_SIRS, expand.grid(x = x, y = y))
+interp_df_SIRS$z <- as.vector(interp_res_SIRS$z)
+
+SIRS_interp_plot <- ggplot(interp_df_SIRS, aes(x, y, fill = z)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  xlab("Proportion modern buildings") +
+  ylab("Clark Evan's R") +
+  labs(fill = "Peak prevalance") +
+  ggtitle("SIRS Dynamics")
+
+SIR_vs_SIRS_heatmap <- grid.arrange(SIR_interp_plot, SIRS_interp_plot)
+#saves into "FigureSaves" folder in "Markdowns" folder
+ggsave("FigureSaves/SIR_vs_SIRS_heatmap.png", plot = SIR_vs_SIRS_heatmap,
+       width = 6,
+       height = 4,
+       dpi = 300)
+```
+
+```{r Spatial Structure Effect}
+model_SIR <- lm(SIR_prevalence ~ prop_modern + Clark_Evans_R, data = spatial_var_combos_clean)
+summary(model_SIR)
+
+model_SIRS <- lm(SIRS_prevalence ~ prop_modern + Clark_Evans_R, data = spatial_var_combos_clean)
+summary(model_SIR)
 ```
