@@ -84,68 +84,6 @@ SIRS_parms <- c(beta = 0.1,   # transmission rate
                 omega = 0.01) # loss of immunity
 ```
 
-```{r SIR sim}
-sim_list <- list()
-map_intensity <- c()
-
-start_time <- Sys.time()
-
-for(map_num in unique(roost_crossed_gradient$map_ID)) {
-  roost_parms[1] <- num_roosts
-  num_days <- 100
-  
-  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == roost_num,]
-  roost_dist <- distMatrix(num_roosts, roost_map)
-  
-  roosts <- data.frame(
-    S = vector("numeric", length=roost_parms[1]),
-    I = vector("numeric", length=roost_parms[1]),
-    R = vector("numeric", length=roost_parms[1]),
-    N = vector("numeric", length=roost_parms[1]),
-    N_max = roost_map$N_max
-  )
-
-  #Populate Roosts
-  roosts$N <- round(roosts$N_max/1.5)
-  roosts$S <- roosts$N
-  roosts$S[1] <- roosts$S[1]-1
-  roosts$I <- roosts$N-roosts$S
-
-  #Total distances between any 2 roosts
-  total_dist <- 0
-  for(i in 1:roost_parms[1]) {
-    for(j in 1:i) {
-      total_dist <- total_dist + as.numeric(roost_dist[i,j])
-    }
-  }
-
-  #Score, a measure of isolation. greater score ==> greater isolation
-  scores <- vector("numeric", length=roost_parms[1])
-  for(i in 1:roost_parms[1]) {
-    tot <- sum(roost_dist[i,])
-    scores[i] <- tot/total_dist
-  }
-  
-  sim_list[[1]] <- roosts
-  for(i in 2:num_days) {
-    sim_list[[i]] <- singleDay(roosts, 
-                               roost_dist, 
-                               roost_parms, 
-                               SIR_parms, 
-                               model="SIR", 
-                               scores, 
-                               phi_max=0.25)
-  }
-  
-  inf_sums <- c()
-  for(i in 1:length(sim_list)) {
-    inf_sums[i] <- sum(sim_list[[i]]$I)
-  }
-  map_intensity[map_num] <- max(inf_sums)
-  
-}
-```
-
 ```{r SIRS sim}
 sim_list_SIR <- list()
 map_intensity_SIR <- c()
@@ -154,6 +92,8 @@ sim_list_SIRS <- list()
 map_intensity_SIRS <- c()
 
 start_time <- Sys.time()
+
+sim_list_list_SIR <- list()
 
 for(map_num in unique(roost_crossed_gradient$map_ID)) {
   roost_parms[1] <- num_roosts
