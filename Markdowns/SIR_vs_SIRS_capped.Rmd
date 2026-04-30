@@ -1,0 +1,308 @@
+---
+title: "Untitled"
+author: "Henry Traynor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+We want to compare SIR vs SIRS dynamics across gradients of urbanization and correlated spatial statistics. We will generate a gradient of modern structures in a landscape crossed with a gradient of a given spatial statistic. Running simulated epidemics on this landscape with SIR and SIRS dynamics reveals the significance of metapopulation dynamics in viral transmission.
+
+
+```{r Sourcing}
+files_functions <- list.files(path = "C:/Users/henry/Molossid_Transmission/Functions", pattern = "\\.R$", full.names = TRUE)
+for(file in files_functions) {
+  source(file)
+}
+```
+
+```{r Landscapes}
+num_roosts <- 100
+
+#sequence giving proportion of modern buildings gradient
+modern_range <- c(0,1)
+modern_resolution <- .075
+prop_modern_seq <- seq(modern_range[1], modern_range[2], by=modern_resolution)
+
+#seq for number of clusters
+cluster_range <- c(1,round(num_roosts/4)) # more clusters means lower Moran's I
+cluster_resolution <- 2
+cluster_seq <- seq(cluster_range[1], cluster_range[2], by=cluster_resolution)
+
+#seq for x,y sd of clusters
+sd_range <- c(0.03, 0.2) #higher sd correlates to lower Moran's I
+sd_seq <- seq(sd_range[1], sd_range[2], length=length(cluster_seq))
+
+spatial_var <- data.frame(num_clusters = cluster_seq,
+                          sd = sd_seq)
+
+num_maps <- length(prop_modern_seq)*length(cluster_seq)
+total_num_roosts <- num_maps*num_roosts
+
+roost_crossed_gradient <- data.frame(map_ID = rep(1:num_maps, each=num_roosts),
+                                     x = vector("numeric", length=total_num_roosts),
+                                     y = vector("numeric", length=total_num_roosts),
+                                     isModern = vector("numeric", length=total_num_roosts),
+                                     N_max = vector("numeric", length=total_num_roosts))
+
+spatial_var_combos <- data.frame(prop_modern = rep(prop_modern_seq, length(cluster_seq)))
+spatial_var_combos$num_clusters <- rep(cluster_seq, each=length(prop_modern_seq))
+spatial_var_combos$sd <- rep(sd_seq, each=length(prop_modern_seq))
+spatial_var_combos$Clark_Evans_R <- vector("numeric", length(spatial_var_combos$prop_modern))
+
+for(i in 1:length(spatial_var_combos$prop_modern)) {
+  roost_parms <- c(num_roosts = num_roosts,  # number of roosts
+                   num_clusters = spatial_var_combos$num_clusters[i], # number of clusters
+                   sd = spatial_var_combos$sd[i],
+                   prop_modern = spatial_var_combos$prop_modern[i])     # standard distance from cluster center
+  map <- roostMapProp(roost_parms)
+  map <- map[, !names(map) %in% c("bin")]
+  firstIndex <- which(roost_crossed_gradient$map_ID == i)[1]
+  roost_crossed_gradient[firstIndex:(firstIndex +nrow(map)-1), -1] <- map
+}
+
+library(spatstat.geom)
+library(spatstat.explore)
+for(i in 1:length(spatial_var_combos$prop_modern)) {
+  map <- roost_crossed_gradient[roost_crossed_gradient$map_ID==i,]
+  pp <- ppp(map$x, map$y)
+  spatial_var_combos$Clark_Evans_R[i] <- clarkevans(pp)["cdf"]
+}
+
+spatial_var_combos$sys_N_max <- vector("numeric", length=length(num_maps))
+for(i in 1:num_maps) {
+  temp <- roost_crossed_gradient[roost_crossed_gradient$map_ID == i,]
+  spatial_var_combos$sys_N_max[i] <- sum(temp$N_max)
+}
+```
+
+```{r Infection Parameters}
+SIR_parms  <- c(beta = 0.1,   # transmission rate
+                gamma = 0.03) # recovery rate
+
+SIRS_parms <- c(beta = 0.1,   # transmission rate
+                gamma = 0.03, # recovery rate
+                omega = 0.01) # loss of immunity
+```
+
+```{r sims}
+sim_list_SIR_capped <- list() #temp var that stores days for sim for that map
+sim_list_list_SIR_capped <- list() #stores list above for all maps for later analysis
+map_intensity_SIR_capped <- c() #stores peak intensity of that sim
+
+sim_list_SIRS_capped <- list()
+sim_list_list_SIRS_capped <- list()
+map_intensity_SIRS_capped <- c()
+
+start_time <- Sys.time()
+
+#population size is equal to lowest capacity map at 75% capacity
+pop_cap <- round(min(spatial_var_combos$sys_N_max)/1.333333)
+
+for(map_num in unique(roost_crossed_gradient$map_ID)) {
+  roost_parms[1] <- num_roosts
+  num_days <- 500
+  
+  roost_map <- roost_crossed_gradient[roost_crossed_gradient$map_ID == map_num,]
+  roost_dist <- distMatrix(num_roosts, roost_map)
+  
+  roosts <- data.frame(
+    S = vector("numeric", length=roost_parms[1]),
+    I = vector("numeric", length=roost_parms[1]),
+    R = vector("numeric", length=roost_parms[1]),
+    N = vector("numeric", length=roost_parms[1]),
+    N_max = roost_map$N_max
+  )
+
+  #Populate Roosts
+  #vector of roosts with each label repeated N_max[i] times to act as probability vector
+  
+  if(pop_cap > sum(roosts$N_max)) {
+  stop(paste("pop_cap exceeds total capacity on map", map_num))
+}
+  destinations <- rep(1:num_roosts, times = roosts$N_max)
+  #samples from destinations to yield the destination of each of the pop_cap bats
+  destinations <- sample(destinations, size = pop_cap, replace = FALSE)
+  #places bats in their initial roost
+  for(i in 1:length(destinations)) {
+    roosts$N[destinations[i]] <- roosts$N[destinations[i]] + 1
+  }
+  
+  roosts$S <- roosts$N
+  roosts$S[1] <- roosts$S[1]-1
+  roosts$I <- roosts$N-roosts$S
+
+  #Total distances between any 2 roosts
+  total_dist <- 0
+  for(i in 1:roost_parms[1]) {
+    for(j in 1:i) {
+      total_dist <- total_dist + as.numeric(roost_dist[i,j])
+    }
+  }
+
+  #Score, a measure of isolation. greater score ==> greater isolation
+  scores <- vector("numeric", length=roost_parms[1])
+  for(i in 1:roost_parms[1]) {
+    tot <- sum(roost_dist[i,])
+    scores[i] <- tot/total_dist
+  }
+  
+  sim_list_SIR_capped[[1]] <- roosts
+  sim_list_SIRS_capped[[1]] <- roosts
+  for(i in 2:num_days) {
+    sim_list_SIR_capped[[i]] <- singleDay(sim_list_SIR_capped[[i-1]], 
+                               roost_dist, 
+                               roost_parms, 
+                               SIRS_parms, 
+                               model="SIR", 
+                               scores, 
+                               phi_max=0.25)
+    sim_list_SIRS_capped[[i]] <- singleDay(sim_list_SIRS_capped[[i-1]], 
+                               roost_dist, 
+                               roost_parms, 
+                               SIRS_parms, 
+                               model="SIRS", 
+                               scores, 
+                               phi_max=0.25)
+  }
+  
+  inf_sums_SIR_capped <- c()
+  inf_sums_SIRS_capped <- c()
+  for(i in 1:length(sim_list_SIR_capped)) {
+    inf_sums_SIR_capped[i] <- sum(sim_list_SIR_capped[[i]]$I)
+    inf_sums_SIRS_capped[i] <- sum(sim_list_SIRS_capped[[i]]$I)
+  }
+  map_intensity_SIR_capped[map_num] <- max(inf_sums_SIR_capped)
+  map_intensity_SIRS_capped[map_num] <- max(inf_sums_SIRS_capped)
+  
+  # compute elapsed time
+  elapsed <- Sys.time() - start_time
+  
+  # print progress
+  cat("Iteration:", map_num, " of  ", length(unique(roost_crossed_gradient$map_ID)),
+      "| Elapsed time:", round(elapsed, 2), "\n")
+  
+  sim_list_list_SIR_capped[[map_num]] <- sim_list_SIR_capped
+  sim_list_list_SIRS_capped[[map_num]] <- sim_list_SIRS_capped
+}
+
+spatial_var_combos$SIRS_intensity_capped <- map_intensity_SIRS_capped
+spatial_var_combos$SIR_intensity_capped <- map_intensity_SIR_capped
+
+spatial_var_combos$SIR_prevalence_capped <- spatial_var_combos$SIR_intensity_capped / pop_cap
+spatial_var_combos$SIRS_prevalence_capped <- spatial_var_combos$SIRS_intensity_capped / pop_cap
+```
+
+```{r heatmaps short}
+library(ggplot2)
+library(akima)
+library(gridExtra)
+
+#remove outliers (no significant epidemic takes hold)
+spatial_var_combos_clean <- subset(spatial_var_combos, SIR_prevalence_capped >= 0.1)
+spatial_var_combos_clean <- subset(spatial_var_combos_clean, SIRS_prevalence_capped >= 0.1)
+
+interp_res_SIR_capped <- with(spatial_var_combos_clean, interp(x = prop_modern, y = Clark_Evans_R, z = SIR_prevalence_capped))
+
+interp_df_SIR_capped <- with(interp_res_SIR_capped, expand.grid(x = x, y = y))
+interp_df_SIR_capped$z <- as.vector(interp_res_SIR_capped$z)
+
+SIR_interp_plot_capped <- ggplot(interp_df_SIR_capped, aes(x, y, fill = z)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  xlab("Proportion modern buildings") +
+  ylab("Clark Evan's R") +
+  labs(fill = "Peak prevalance") + 
+  ggtitle("SIR Dynamics")
+
+interp_res_SIRS_capped <- with(spatial_var_combos_clean, interp(x = prop_modern, y = Clark_Evans_R, z = SIRS_prevalence_capped))
+
+interp_df_SIRS_capped <- with(interp_res_SIRS_capped, expand.grid(x = x, y = y))
+interp_df_SIRS_capped$z <- as.vector(interp_res_SIRS_capped$z)
+
+SIRS_interp_plot_capped <- ggplot(interp_df_SIRS_capped, aes(x, y, fill = z)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  xlab("Proportion modern buildings") +
+  ylab("Clark Evan's R") +
+  labs(fill = "Peak prevalance") +
+  ggtitle("SIRS Dynamics")
+
+SIR_vs_SIRS_heatmap_capped <- grid.arrange(SIR_interp_plot_capped, SIRS_interp_plot_capped)
+#saves into "FigureSaves" folder in "Markdowns" folder
+ggsave("FigureSaves/SIR_vs_SIRS_heatmap_capped.png", plot = SIR_vs_SIRS_heatmap_capped,
+       width = 6,
+       height = 4,
+       dpi = 300)
+```
+
+```{r Spatial Structure Effect}
+model_SIR_capped <- lm(SIR_prevalence ~ prop_modern + Clark_Evans_R, data = spatial_var_combos_clean)
+summary(model_SIR)
+
+model_SIRS_capped <- lm(SIRS_prevalence ~ prop_modern + Clark_Evans_R, data = spatial_var_combos_clean)
+summary(model_SIR)
+```
+
+```{r list analysis}
+extract_metrics <- function(sim_list) {
+  # sim_list = one realization (list of daily data frames)
+  
+  # total infected per day
+  I_ts <- sapply(sim_list, function(df) sum(df$I, na.rm = TRUE))
+  
+  # time to peak
+  peak_time <- which.max(I_ts)
+  
+  # epidemic duration (days with infection present)
+  duration <- sum(I_ts > 0)
+  
+  # total infected bat-days
+  total_bat_days <- sum(I_ts)
+  
+  return(data.frame(
+    peak_time = peak_time,
+    duration = duration,
+    total_bat_days = total_bat_days
+  ))
+}
+
+results_SIR_capped <- do.call(
+  rbind,
+  lapply(sim_list_list_SIR_capped, extract_metrics)
+)
+results_SIRS_capped <- do.call(
+  rbind,
+  lapply(sim_list_list_SIRS_capped, extract_metrics)
+)
+
+results_SIR_capped <- cbind(results_SIR_capped, spatial_var_combos[, c("prop_modern", "Clark_Evans_R")])
+results_SIRS_capped <- cbind(results_SIRS_capped, spatial_var_combos[, c("prop_modern", "Clark_Evans_R")])
+
+
+library(dplyr)
+library(ggplot2)
+
+ggplot(results_SIR_capped, aes(x = prop_modern, y = Clark_Evans_R, fill = peak_time)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Time to Peak Epidemic",
+    x = "Proportion Modern",
+    y = "Clark-Evans R",
+    fill = "Peak Time"
+  ) +
+  theme_minimal()
+
+ggplot(results_SIR_capped, aes(prop_modern, Clark_Evans_R)) +
+  stat_summary_2d(aes(z = peak_time), bins = 20) +
+  scale_fill_viridis_c() +
+  theme_minimal()
+```
