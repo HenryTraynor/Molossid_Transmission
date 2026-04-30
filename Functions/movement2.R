@@ -30,12 +30,16 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
   for(i in 1:num_roosts) {
     phi <-  phi_max*(1-scores[i])
     #Number leaving each compartment
-    N_e <- safe_rbinom(1, roosts$N[i], phi)
+    total_compartments <- roosts$S[i] + roosts$I[i] + roosts$R[i]
+    N_e <- safe_rbinom(1, total_compartments, phi)
     emigrant_bats$N[i] <- N_e
     if(N_e > 0) {
       x <- c(rep(1, roosts$S[i]),
              rep(2, roosts$I[i]),
              rep(3, roosts$R[i]))
+      if(length(x) == 0 || N_e == 0) {
+        next
+      }
       samp <- sample.vec(x, N_e)
       for(j in 1:N_e) {
         emigrant_bats[i,samp[j]] <- emigrant_bats[i,samp[j]] + 1
@@ -74,10 +78,18 @@ movement2 <- function(roosts, num_roosts, phi_max, roost_dist, scores) {
     for(k in 1:3) {
       if(emigrant_bats[i,k] != 0) {
         #gives vector of destinations
-        destinations <- sample.int(num_roosts,
-                                   size=emigrant_bats[i,k],
-                                   replace=TRUE,
-                                   prob=pi)
+        if(sum(pi) <= 0 || any(is.na(pi))) {
+          #fallback: stay in original roost
+          destinations <- rep(i, emigrant_bats[i,k])
+        } else {
+          destinations <- sample.int(
+            num_roosts,
+            size = emigrant_bats[i,k],
+            replace = TRUE,
+            prob = pi
+          )
+        }
+        
         for(j in 1:length(destinations)) {
           immigrant_bats[destinations[j],k] <- immigrant_bats[destinations[j],k] + 1
         }
